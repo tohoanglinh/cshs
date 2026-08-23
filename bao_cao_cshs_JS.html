@@ -1,0 +1,591 @@
+<script>
+  // Đặt ngày hiện tại
+  document.getElementById('ngay').valueAsDate = new Date();
+
+  // 1. Hàm hỗ trợ lấy ngày định dạng YYYY-MM-DD
+  function formatDateInput(date) {
+    var d = new Date(date),
+        month = '' + (d.getMonth() + 1),
+        day = '' + d.getDate(),
+        year = d.getFullYear();
+
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+
+    return [year, month, day].join('-');
+  }
+
+  // 2. Thiết lập ngày mặc định khi mở trang
+  var today = new Date();
+  var firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  var strToday = formatDateInput(today);
+  var strFirstDay = formatDateInput(firstDayOfMonth);
+
+  // Tab Nhập: Mặc định ngày hôm nay
+  document.getElementById('ngay').value = strToday;
+
+  // Tab Tra cứu: Từ đầu tháng đến hôm nay
+  document.getElementById('filterTuNgay').value = strFirstDay;
+  document.getElementById('filterDenNgay').value = strToday;
+
+  // Tab Thống kê: Từ đầu tháng đến hôm nay
+  document.getElementById('tkTuNgay').value = strFirstDay;
+  document.getElementById('tkDenNgay').value = strToday;
+
+  // Switch tab
+  function switchTab(tabName) {
+    document.getElementById('tab-nhap').classList.remove('active');
+    document.getElementById('tab-tracuu').classList.remove('active');
+    document.getElementById('tab-thongke').classList.remove('active');
+
+    var navs = document.querySelectorAll('.nav-item');
+    navs.forEach(function(n) { n.classList.remove('active'); });
+
+    if (tabName === 'nhap') {
+      document.getElementById('tab-nhap').classList.add('active');
+      navs[0].classList.add('active');
+    } else if (tabName === 'tracuu') {
+      document.getElementById('tab-tracuu').classList.add('active');
+      navs[1].classList.add('active');
+      tracuuData();
+    } else if (tabName === 'thongke') {
+      document.getElementById('tab-thongke').classList.add('active');
+      navs[2].classList.add('active');
+      taiThongKe();
+    }
+  }
+
+  // Lấy mã năm học đang chọn ở Trang chủ (vd: "2627"), dùng ở mọi lời gọi server
+  function maNamHocHienTai() {
+    var el = document.getElementById('globalSelectNamHoc');
+    return el ? el.value : "2627";
+  }
+
+  function toggleChip(el) { 
+    el.classList.toggle('selected'); 
+  }
+
+  function getSelectedChips(field) {
+    var group = document.querySelector('.chips-group[data-field="' + field + '"]');
+    if (!group) return [];
+    var selected = group.querySelectorAll('.chip.selected');
+    var result = [];
+    selected.forEach(function(c) { result.push(c.innerText.trim()); });
+    return result;
+  }
+
+  // Tải lớp (theo năm học đang chọn ở Trang chủ)
+  function taiDanhSachLopBaoCao() {
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run.withSuccessHandler(function(dsLop) {
+      var selectNhap = document.getElementById('lop');
+      var selectFilter = document.getElementById('filterLop');
+      
+      if (!dsLop || dsLop.length === 0) {
+        selectNhap.innerHTML = '<option value="">Chưa lấy được lớp (Kiểm tra lại tab DSGV)</option>';
+        return;
+      }
+      
+      selectNhap.innerHTML = '<option value="">Chọn lớp</option>';
+      selectFilter.innerHTML = '<option value="Tất cả lớp">Tất cả lớp</option>';
+      
+      dsLop.forEach(function(lop) {
+        selectNhap.innerHTML += '<option value="' + lop + '">' + lop + '</option>';
+        selectFilter.innerHTML += '<option value="' + lop + '">' + lop + '</option>';
+      });
+    }).withFailureHandler(function(err) {
+      document.getElementById('lop').innerHTML = '<option value="">Lỗi kết nối server</option>';
+    }).layDanhSachLop(maNamHoc);
+
+    // Danh mục lỗi cũng thuộc riêng từng năm học nên tải lại cùng lúc
+    taiDanhMucLoi();
+  }
+  taiDanhSachLopBaoCao();
+
+  // Tải danh mục lỗi (theo năm học đang chọn ở Trang chủ)
+  function taiDanhMucLoi() {
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run.withSuccessHandler(function(danhMuc) {
+      if (!danhMuc) return;
+      Object.keys(danhMuc).forEach(function(field) {
+        var group = document.querySelector('.chips-group[data-field="' + field + '"]');
+        if (group) {
+          group.innerHTML = '';
+          if (danhMuc[field] && danhMuc[field].length > 0) {
+            danhMuc[field].forEach(function(loi) {
+              group.innerHTML += '<div class="chip" onclick="toggleChip(this)">' + loi + '</div>';
+            });
+          } else {
+            group.innerHTML = '<span style="font-size:12px; color:#999;">Không có danh mục</span>';
+          }
+        }
+      });
+    }).layDanhMucLoi(maNamHoc);
+  }
+
+  function luuBaoCao() {
+    var btn = document.getElementById('btnSubmit');
+    var lop = document.getElementById('lop').value;
+
+    // Kiểm tra nhanh: Bắt buộc chọn Lớp trước khi gửi
+    if (!lop) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Nhắc nhở',
+        text: 'Vui lòng chọn Lớp trước khi lưu!',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'Đã hiểu'
+      });
+      
+      return;
+    }
+
+    // 1. KHÓA NÚT VÀ ĐỔI GIAO DIỆN CHỐNG BẤM TRÙNG
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.style.cursor = 'not-allowed';
+    btn.innerText = "⏳ Đang lưu báo cáo...";
+
+    var data = {
+      maNamHoc: maNamHocHienTai(),
+      ngay: document.getElementById('ngay').value,
+      lop: lop,
+      viPhamGioAn: getSelectedChips('viPhamGioAn'), ghichuGioAn: document.getElementById('ghichuGioAn').value,
+      viPhamGioNgu: getSelectedChips('viPhamGioNgu'), ghichuGioNgu: document.getElementById('ghichuGioNgu').value,
+      viPhamBaoCom: getSelectedChips('viPhamBaoCom'), ghichuBaoCom: document.getElementById('ghichuBaoCom').value,
+      ghichuPhoiHop: document.getElementById('ghichuPhoiHop').value,
+      viPhamVeSinh: getSelectedChips('viPhamVeSinh'), ghichuVeSinh: document.getElementById('ghichuVeSinh').value,
+      viPhamBanThan: getSelectedChips('viPhamBanThan'), ghichuBanThan: document.getElementById('ghichuBanThan').value,
+      viPhamVanHoa: getSelectedChips('viPhamVanHoa'), ghichuVanHoa: document.getElementById('ghichuVanHoa').value
+    };
+
+    // 2. GỬI DỮ LIỆU LÊN SERVER
+    google.script.run
+      .withSuccessHandler(function(res) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Thành công!',
+          text: res || 'Gửi báo cáo thành công!',
+          confirmButtonColor: '#2e7d32',
+          confirmButtonText: 'Đồng ý'
+        });
+        resetForm();
+        
+        // MO NÚT TRỞ LẠI SAU KHÍ XỬ LÝ XONG
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.innerText = "Lưu báo cáo";
+      })
+      .withFailureHandler(function(err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi gửi báo cáo!',
+          text: err,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Đóng'
+        });
+        
+        // MỞ NÚT LẠI ĐỂ THỬ LẠI NẾU BỊ LỖI MẠNG
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.innerText = "Lưu báo cáo";
+      })
+      .luuBaoCao(data);
+  }
+
+  function resetForm() {
+    document.querySelectorAll('.chip.selected').forEach(function(c) { c.classList.remove('selected'); });
+    document.querySelectorAll('textarea').forEach(function(t) { t.value = ''; });
+    document.getElementById('lop').value = '';
+  }
+
+  function getFilterParams() {
+    return {
+      maNamHoc: maNamHocHienTai(),
+      tuNgay: document.getElementById('filterTuNgay').value,
+      denNgay: document.getElementById('filterDenNgay').value,
+      lop: document.getElementById('filterLop').value
+    };
+  }
+
+  // Khai báo biến quản lý phân trang
+  var currentData = [];
+  var currentPage = 1;
+  var pageSize = 10; // Hiển thị 10 báo cáo/trang
+
+  function tracuuData() {
+    var tuNgay = document.getElementById('filterTuNgay').value;
+    var denNgay = document.getElementById('filterDenNgay').value;
+    var listContainer = document.getElementById('listBaoCao');
+    var paginationBox = document.getElementById('paginationBox');
+
+    // BẮT BỘC: Kiểm tra nếu chưa chọn đủ 2 mốc ngày
+    if (!tuNgay || !denNgay) {
+      listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#e65100; font-weight:500;">⚠️ Vui lòng chọn đầy đủ "Từ ngày" và "Đến ngày" để xem danh sách báo cáo.</div>';
+      document.getElementById('countText').innerText = "0 báo cáo";
+      if (paginationBox) paginationBox.style.display = 'none';
+      return;
+    }
+
+    listContainer.innerHTML = getLoadingHTML("Đang lấy danh sách báo cáo...");
+
+    google.script.run.withSuccessHandler(function(data) {
+      currentData = data || [];
+      currentPage = 1; // Reset về trang 1 khi tra cứu mới
+      renderPage();
+    }).layDanhSachBaoCao(getFilterParams());
+  }
+
+  // Hàm vẽ giao diện theo trang
+  function renderPage() {
+    var listContainer = document.getElementById('listBaoCao');
+    var countElem = document.getElementById('countText');
+    var pageInfo = document.getElementById('pageInfo');
+    var btnPrev = document.getElementById('btnPrevPage');
+    var btnNext = document.getElementById('btnNextPage');
+    var paginationBox = document.getElementById('paginationBox');
+
+    var total = currentData.length;
+    if (countElem) countElem.innerText = total + " báo cáo";
+
+    if (total === 0) {
+      listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Không tìm thấy báo cáo nào trong khoảng thời gian này.</div>';
+      if (paginationBox) paginationBox.style.display = 'none';
+      return;
+    }
+
+    if (paginationBox) paginationBox.style.display = 'flex';
+
+    var totalPages = Math.ceil(total / pageSize);
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    // Cắt dữ liệu lấy 20 bản ghi của trang hiện tại
+    var start = (currentPage - 1) * pageSize;
+    var end = Math.min(start + pageSize, total);
+    var pageItems = currentData.slice(start, end);
+
+    var maNamHocLucRender = maNamHocHienTai();
+
+    var html = '';
+    pageItems.forEach(function(item, index) {
+      var globalIndex = start + index;
+      window['rawZalo_' + globalIndex] = item.rawTextZalo;
+
+      html += '<div class="card">' +
+        '<div class="card-header"><span>Lớp ' + (item.lop || 'N/A') + '</span><span class="card-date">' + item.ngay + '</span></div>' +
+        '<div class="card-body">' + item.noiDung + '</div>' +
+        '<div style="display: flex; gap: 8px; margin-top: 8px;">' +
+          '<button class="btn-zalo" style="margin-top:0; flex: 1;" onclick="guiZalo(' + globalIndex + ')">📲 Sao chép gửi Zalo</button>' +
+          '<button class="btn-action btn-delete" onclick="xoaTrucTiep(' + item.rowIndex + ', \'' + maNamHocLucRender + '\')">🗑️ Xóa</button>' +
+        '</div>' +
+      '</div>';
+    });
+
+    listContainer.innerHTML = html;
+
+    // Cập nhật nút phân trang & trạng thái
+    if (pageInfo) pageInfo.innerText = "Trang " + currentPage + " / " + totalPages;
+    if (btnPrev) btnPrev.disabled = (currentPage === 1);
+    if (btnNext) btnNext.disabled = (currentPage === totalPages);
+  }
+
+  // Hàm chuyển trang khi bấm nút
+  function changePage(step) {
+    currentPage += step;
+    renderPage();
+    // Cuộn lên đầu danh sách tra cứu
+    document.getElementById('tab-tracuu').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Hàm xóa trực tiếp từng thẻ báo cáo (Đã fix triệt để lỗi lệch rowIndex)
+  function xoaTrucTiep(rowIndex, maNamHoc) {
+    Swal.fire({
+      title: 'Xác nhận xóa?',
+      text: 'Bạn có chắc chắn muốn xóa báo cáo này không? Hành động này không thể hoàn tác.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6e7881',
+      confirmButtonText: 'Đồng ý xóa',
+      cancelButtonText: 'Hủy'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // 1. Hiển thị thông báo đang xử lý để chống người dùng bấm liên tiếp
+        var listContainer = document.getElementById('listBaoCao');
+        if (listContainer) {
+          listContainer.style.opacity = '0.5';
+          listContainer.style.pointerEvents = 'none';
+        }
+
+        // 2. Gọi hàm xóa dưới Server
+        google.script.run
+          .withSuccessHandler(function(res) {
+            Swal.fire({
+              icon: 'success',
+              title: 'Thành công!',
+              text: res || 'Xóa báo cáo Riêng Lẻ thành công!',
+              confirmButtonColor: '#2e7d32',
+              confirmButtonText: 'Đồng ý'
+            });
+
+            // Mở lại tương tác màn hình
+            if (listContainer) {
+              listContainer.style.opacity = '1';
+              listContainer.style.pointerEvents = 'auto';
+            }
+
+            // 3. TẢI LẠI TOÀN BỘ DỮ LIỆU ĐỂ CẬP NHẬT LẠI ROWINDEX CHUẨN XÁC
+            tracuuData();
+          })
+          .withFailureHandler(function(err) {
+            Swal.fire({
+              icon: 'error',
+              title: 'Lỗi khi xóa!',
+              text: err,
+              confirmButtonColor: '#d33',
+              confirmButtonText: 'Đóng'
+            });
+
+            if (listContainer) {
+              listContainer.style.opacity = '1';
+              listContainer.style.pointerEvents = 'auto';
+            }
+          })
+          .xoaMotBaoCao(rowIndex, maNamHoc || maNamHocHienTai());
+      }
+    });
+  }
+
+  function guiZalo(idx) {
+    var text = window['rawZalo_' + idx];
+    navigator.clipboard.writeText(text).then(function() {
+      Swal.fire({
+        icon: 'success',
+        title: 'Đã sao chép!',
+        text: 'Đã sao chép nội dung báo cáo! Hệ thống sẽ mở Zalo, cô chỉ cần bấm Dán (Ctrl + V) để gửi nhé.',
+        confirmButtonColor: '#2e7d32',
+        confirmButtonText: 'Đồng ý'
+      });
+
+      window.open('https://zalo.me', '_blank');
+    });
+  }
+
+  function taiThongKe() {
+    var tuNgay = document.getElementById('tkTuNgay').value;
+    var denNgay = document.getElementById('tkDenNgay').value;
+    var boxLoi = document.getElementById('boxTopLoi');
+    var boxLop = document.getElementById('boxTopLop');
+    var boxLopIt = document.getElementById('boxTopLopItNhat');
+
+    if (!tuNgay || !denNgay) {
+      boxLoi.innerHTML = '<span style="color:#e65100;">⚠️ Vui lòng chọn Từ ngày và Đến ngày.</span>';
+      boxLop.innerHTML = '<span style="color:#e65100;">⚠️ Vui lòng chọn Từ ngày và Đến ngày.</span>';
+      boxLopIt.innerHTML = '<span style="color:#e65100;">⚠️ Vui lòng chọn Từ ngày và Đến ngày.</span>';
+      return;
+    }
+
+    boxLoi.innerHTML = getLoadingHTML("Đang tổng hợp lỗi...");
+    boxLop.innerHTML = getLoadingHTML("Đang tính toán...");
+    boxLopIt.innerHTML = getLoadingHTML("Đang tính toán...");
+
+    var filter = { tuNgay: tuNgay, denNgay: denNgay, maNamHoc: maNamHocHienTai() };
+
+    google.script.run.withSuccessHandler(function(res) {
+      if (!res) return;
+      
+      // 1. Hiển thị Top Lỗi
+      var htmlLoi = '';
+      if (!res.topLoi || res.topLoi.length === 0) {
+        htmlLoi = 'Không có dữ liệu trong khoảng thời gian này';
+      } else {
+        res.topLoi.forEach(function(i) { 
+          htmlLoi += '<div class="stat-item"><span>' + i.name + '</span><b>' + i.count + ' lần</b></div>'; 
+        });
+      }
+      boxLoi.innerHTML = htmlLoi;
+
+      // 2. Hiển thị Top Lớp Nhắc Nhở Nhiều Nhất (SỬA THÀNH CHỮ ĐỎ)
+      var htmlLop = '';
+      if (!res.topLop || res.topLop.length === 0) {
+        htmlLop = 'Không có dữ liệu trong khoảng thời gian này';
+      } else {
+        res.topLop.forEach(function(i) { 
+          htmlLop += '<div class="stat-item"><span>Lớp ' + i.name + '</span><b style="color: #c62828;">' + i.count + ' lần</b></div>'; 
+        });
+      }
+      boxLop.innerHTML = htmlLop;
+
+      // 3. Hiển thị Top Lớp Nhắc Nhở Ít Nhất
+      var htmlLopIt = '';
+      if (!res.topLopItNhat || res.topLopItNhat.length === 0) {
+        htmlLopIt = 'Không có dữ liệu trong khoảng thời gian này';
+      } else {
+        res.topLopItNhat.forEach(function(i) { 
+          htmlLopIt += '<div class="stat-item"><span>Lớp ' + i.name + '</span><b style="color: #2e7d32;">' + i.count + ' lần</b></div>'; 
+        });
+      }
+      boxLopIt.innerHTML = htmlLopIt;
+
+    }).layThongKe(filter);
+  }
+
+  // Hàm tải file trực tiếp qua URL Google Export
+  function taiFileBaoCao(dinhDang) {
+    var filter = {
+      maNamHoc: maNamHocHienTai(),
+      tuNgay: document.getElementById('filterTuNgay').value,
+      denNgay: document.getElementById('filterDenNgay').value,
+      lop: document.getElementById('filterLop').value
+    };
+
+    var tenLoai = (dinhDang === 'pdf') ? 'PDF' : 'Excel (.xlsx)';
+    
+    // Mở Tab màn hình chờ
+    var newTab = window.open('about:blank', '_blank');
+    if (newTab) {
+      newTab.document.write(
+        '<!DOCTYPE html><html><head><title>Đang tải báo cáo...</title><meta charset="utf-8">' +
+        '<style>' +
+        '  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f6f9; }' +
+        '  .card { background: #fff; padding: 35px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 420px; }' +
+        '  .spinner { border: 4px solid #e9ecef; border-top: 4px solid #198754; border-radius: 50%; width: 45px; height: 45px; animation: spin 0.9s linear infinite; margin: 0 auto 18px auto; }' +
+        '  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }' +
+        '  h3 { color: #198754; margin: 0 0 10px 0; font-size: 20px; }' +
+        '  p { color: #6c757d; font-size: 14px; margin: 0; line-height: 1.5; }' +
+        '  .btn { display: inline-block; margin-top: 15px; padding: 10px 20px; background: #198754; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; }' +
+        '</style></head><body>' +
+        '  <div class="card">' +
+        '    <div class="spinner" id="iconSpinner"></div>' +
+        '    <h3 id="txtTitle">⏳ Đang tạo file ' + tenLoai + '</h3>' +
+        '    <p id="txtDesc">Dữ liệu đang được căn chỉnh độ rộng cột và định dạng. Cô vui lòng đợi giây lát...</p>' +
+        '    <div id="btnContainer"></div>' +
+        '  </div>' +
+        '</body></html>'
+      );
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          if (newTab) {
+            newTab.document.getElementById('iconSpinner').style.display = 'none';
+            newTab.document.getElementById('txtTitle').innerText = "✅ Tải file thành công!";
+            newTab.document.getElementById('txtDesc').innerHTML = "File <b>" + res.fileName + "</b> đang tự động tải xuống thư mục Downloads.";
+            newTab.document.getElementById('btnContainer').innerHTML = 
+              '<a href="' + res.downloadUrl + '" class="btn">Click vào đây nếu file chưa tải về</a>';
+
+            // Kích hoạt tải file
+            newTab.location.href = res.downloadUrl;
+          }
+
+          // Xóa Sheet tạm sau 12 giây khi file đã tải xong về máy
+          setTimeout(function() {
+            google.script.run.xoaSheetTam(res.tempSheetName, res.maNamHoc);
+          }, 12000);
+
+        } else {
+          if (newTab) newTab.close();
+          Swal.fire({
+            icon: 'error',
+            title: 'Thất bại',
+            text: 'Không thể tạo dữ liệu xuất file.',
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Đóng'
+          });
+        }
+      })
+      .withFailureHandler(function(err) {
+        if (newTab) newTab.close();
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi hệ thống!',
+          text: err,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'Đóng'
+        });
+      })
+      .xuatFileBaoCaoChuan(filter, dinhDang);
+  }
+
+  function taiExcel() {
+    taiFileBaoCao('xlsx');
+  }
+
+  function xoaBaoCao() {
+    // Bước 1: Hiện hộp thoại nhập chữ DONGYXOA
+    Swal.fire({
+      title: '⚠️ CẢNH BÁO NGUY HIỂM!',
+      html: 'Hành động này sẽ <b>XÓA TOÀN BỘ</b> các báo cáo đang hiển thị theo bộ lọc tìm kiếm hiện tại!<br>Dữ liệu đã xóa <b>KHÔNG THỂ KHÔI PHỤC LAI</b>.<br><br>Nếu chắc chắn muốn xóa, cô vui lòng gõ chữ <b>DONGYXOA</b> vào ô bên dưới:',
+      input: 'text',
+      inputPlaceholder: 'Gõ DONGYXOA vào đây...',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#6e7881',
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy bỏ'
+    }).then((result) => {
+      // Nếu bấm Xác nhận
+      if (result.isConfirmed) {
+        const textVal = (result.value || '').trim().toUpperCase();
+
+        // Kiểm tra chữ nhập vào
+        if (textVal !== 'DONGYXOA') {
+          Swal.fire({
+            icon: 'error',
+            title: 'Xác nhận sai',
+            text: 'Chữ xác nhận không đúng! Thao tác xóa đã được hủy bỏ an toàn.',
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Đóng'
+          });
+          return;
+        }
+
+        // Bước 2: Hỏi lại lần cuối cực kỳ đẹp mắt
+        Swal.fire({
+          title: '❗️ XÁC NHẬN LẦN CUỐI',
+          text: 'Bấm "Đồng ý xóa" để tiến hành XÓA VĨNH VIỄN các báo cáo này!',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#6e7881',
+          confirmButtonText: 'Đồng ý xóa',
+          cancelButtonText: 'Hủy'
+        }).then((confirmFinal) => {
+          if (confirmFinal.isConfirmed) {
+            // Gửi lệnh xóa lên Google Sheet
+            google.script.run
+              .withSuccessHandler(function(msg) {
+                Swal.fire({
+                  icon: 'info',
+                  title: 'Thông báo',
+                  text: msg,
+                  confirmButtonColor: '#1b8754',
+                  confirmButtonText: 'Đồng ý'
+                });
+                tracuuData();
+              })
+              .xoaBaoCaoFilter(getFilterParams());
+          }
+        });
+      }
+    });
+  }
+
+  // Hàm tạo giao diện Spinner xoay trung tâm
+  function getLoadingHTML(text) {
+    var message = text || "Đang tải dữ liệu...";
+    return '<div class="loading-overlay">' +
+             '<div class="spinner"></div>' +
+             '<span>' + message + '</span>' +
+           '</div>';
+  }
+
+</script>

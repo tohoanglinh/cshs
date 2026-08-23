@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('nhan_su_CSS'); ?>
+  </head>
+  <body>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<div class="ns-container">
+  <div class="ns-header">
+    <h3 style="margin: 0; color: #2c3e50;">👩‍🏫 Quản Lý Nhân Sự CSHS</h3>
+  </div>
+
+  <!-- TAB 1: DANH SÁCH -->
+  <div id="tabDanhSach">
+    <input type="text" id="inputSearch" class="search-box" placeholder="🔍 Tìm kiếm nhân sự..." onkeyup="timKiemNhanSu()">
+    <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 150px;">
+        <select id="selectThangSinh" class="search-box" onchange="timKiemNhanSu()">
+          <option value="">-- Tất cả tháng sinh --</option>
+          <option value="1">Sinh nhật tháng 1</option>
+          <option value="2">Sinh nhật tháng 2</option>
+          <option value="3">Sinh nhật tháng 3</option>
+          <option value="4">Sinh nhật tháng 4</option>
+          <option value="5">Sinh nhật tháng 5</option>
+          <option value="6">Sinh nhật tháng 6</option>
+          <option value="7">Sinh nhật tháng 7</option>
+          <option value="8">Sinh nhật tháng 8</option>
+          <option value="9">Sinh nhật tháng 9</option>
+          <option value="10">Sinh nhật tháng 10</option>
+          <option value="11">Sinh nhật tháng 11</option>
+          <option value="12">Sinh nhật tháng 12</option>
+        </select>
+      </div>
+
+      <div style="flex: 1; min-width: 150px;">
+        <select id="selectKhoi" class="search-box" onchange="timKiemNhanSu()">
+          <option value="">-- Tất cả khối lớp --</option>
+          <option value="1">Khối 1</option>
+          <option value="2">Khối 2</option>
+          <option value="3">Khối 3</option>
+          <option value="4">Khối 4</option>
+          <option value="5">Khối 5</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="ns-table">
+        <thead id="thNhanSu"></thead>
+        <tbody id="tbNhanSuBody">
+          <tr><td style="text-align: center;">Đang tải dữ liệu...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 2: CẬP NHẬT FORM ĐỘNG -->
+  <div id="tabCapNhat" style="display: none;">
+    <div class="ns-card-form">
+      <!-- ĐÃ ĐỔI TIÊU ĐỀ -->
+      <h4 style="margin-top: 0; color: #2e7d32;">Xem và cập nhật nhân sự</h4>
+      
+      <div class="ns-form-group">
+        <label>Chọn nhân sự để sửa/xoá (hoặc để trống để thêm mới):</label>
+        <select id="selectGVChon" class="search-box" onchange="doDuLieuVaoForm()">
+          <option value="">-- Thêm nhân sự mới --</option>
+        </select>
+      </div>
+
+      <!-- Nơi chứa các ô Input sinh tự động theo Cột trên Sheet -->
+      <div id="dynamicInputsContainer"></div>
+
+      <!-- CỤM NÚT BẤM BẰNG NHAU CHUẨN 100% -->
+      <div class="ns-btn-group" style="display: flex; gap: 15px; margin-top: 15px; align-items: center;">
+        <button id="btnLuuNhanSu" class="btn-submit" onclick="luuThongTinNhanSu()" style="flex: 1; height: 48px; padding: 0 20px; line-height: 48px; box-sizing: border-box; margin: 0;">💾 Lưu</button>
+        <button id="btnXoaGV" class="btn-delete" onclick="xoaNhanSu()" style="flex: 1; height: 48px; padding: 0 20px; line-height: 48px; box-sizing: border-box; margin: 0; background-color: #d32f2f; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🗑️ Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: THỐNG KÊ -->
+  <div id="tabThongKe" style="display: none; text-align: center; padding: 40px 20px;">
+    <h3 style="color: #666; font-weight: normal;">🚧 Tính năng Thống kê đang phát triển...</h3>
+  </div>
+  </div>
+
+  <!-- THANH NÚT ĐIỀU HƯỚNG -->
+  <div class="ns-nav-bar">
+    <button id="btnTabDS" class="ns-nav-btn active" onclick="chuyenTabNhanSu('danhSach')">📋 Danh sách</button>
+    <button id="btnTabCapNhat" class="ns-nav-btn" onclick="chuyenTabNhanSu('capNhat')">✏️ Cập nhật</button>
+    <button id="btnTabThongKe" class="ns-nav-btn" onclick="chuyenTabNhanSu('thongKe')">📊 Thống kê</button>
+  </div>
+
+  <?!= include('nhan_su_JS'); ?>
+  </body>
+</html>

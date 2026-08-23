@@ -1,0 +1,512 @@
+<script>
+  var globalHeaders = [];
+  var globalDataGV = [];
+
+  document.addEventListener("DOMContentLoaded", function() {
+    taiDanhSachGV();
+  });
+
+  function chuyenTabNhanSu(tabName) {
+    // 1. Bỏ active ở tất cả các nút
+    document.getElementById('btnTabDS').classList.remove('active');
+    document.getElementById('btnTabCapNhat').classList.remove('active');
+    if (document.getElementById('btnTabThongKe')) {
+      document.getElementById('btnTabThongKe').classList.remove('active');
+    }
+
+    // 2. Ẩn toàn bộ các Tab
+    document.getElementById('tabDanhSach').style.display = 'none';
+    document.getElementById('tabCapNhat').style.display = 'none';
+    if (document.getElementById('tabThongKe')) {
+      document.getElementById('tabThongKe').style.display = 'none';
+    }
+
+    // 3. Hiển thị Tab được chọn
+    if (tabName === 'danhSach') {
+      document.getElementById('btnTabDS').classList.add('active');
+      document.getElementById('tabDanhSach').style.display = 'block';
+    } else if (tabName === 'capNhat') {
+      document.getElementById('btnTabCapNhat').classList.add('active');
+      document.getElementById('tabCapNhat').style.display = 'block';
+    } else if (tabName === 'thongKe') {
+      if (document.getElementById('btnTabThongKe')) {
+        document.getElementById('btnTabThongKe').classList.add('active');
+      }
+      if (document.getElementById('tabThongKe')) {
+        document.getElementById('tabThongKe').style.display = 'block';
+        locThongKeNhanSu(); // Tự động chạy lọc dữ liệu khi bật tab
+      }
+    }
+  }
+
+  function locThongKeNhanSu() {
+    // UI tab Thống kê đang phát triển (chỉ có placeholder), chưa có bảng thật.
+    // Thoát sớm để tránh lỗi "Cannot set properties of null" khi các phần tử dưới đây chưa tồn tại.
+    if (!document.getElementById('thNhanSuTK') || !document.getElementById('tbNhanSuTKBody') || !document.getElementById('tkKetQuaCount')) {
+      return;
+    }
+
+    var thangChon = document.getElementById('selectThangSinh').value;
+    var khoiChon = document.getElementById('selectKhoi').value;
+
+    // Xác định vị trí cột Ngày sinh và Lớp
+    var idxNgaySinh = globalHeaders.findIndex(function(h) {
+      return boDauTiengViet(h).includes('ngay sinh');
+    });
+
+    var idxLop = globalHeaders.findIndex(function(h) {
+      var title = boDauTiengViet(h);
+      return title === 'lop' || title.includes('lop');
+    });
+
+    var filtered = globalDataGV.filter(function(item) {
+      var matchThang = true;
+      var matchKhoi = true;
+
+      // Lọc theo Tháng
+      if (thangChon !== "" && idxNgaySinh !== -1) {
+        var valNgaySinh = formatGiaTriHienThi(item.values[idxNgaySinh]); // Định dạng dd/MM/yyyy
+        if (valNgaySinh && valNgaySinh.includes('/')) {
+          var parts = valNgaySinh.split('/');
+          var monthVal = parseInt(parts[1], 10);
+          matchThang = (monthVal === parseInt(thangChon, 10));
+        } else {
+          matchThang = false;
+        }
+      }
+
+      // Lọc theo Khối (Ví dụ: Lớp "1A1", "1B0" -> Khối 1)
+      if (khoiChon !== "" && idxLop !== -1) {
+        var valLop = (item.values[idxLop] || "").toString().trim();
+        matchKhoi = valLop.startsWith(khoiChon);
+      }
+
+      return matchThang && matchKhoi;
+    });
+
+    // Hiển thị tiêu đề cột
+    var tr = '<tr>';
+    globalHeaders.forEach(function(h) { tr += '<th>' + h + '</th>'; });
+    tr += '</tr>';
+    document.getElementById('thNhanSuTK').innerHTML = tr;
+
+    // Hiển thị dữ liệu
+    var tbody = document.getElementById('tbNhanSuTKBody');
+    document.getElementById('tkKetQuaCount').innerText = 'Tìm thấy: ' + filtered.length + ' nhân sự';
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="' + globalHeaders.length + '" style="text-align: center;">Không có dữ liệu phù hợp.</td></tr>';
+      return;
+    }
+
+    var html = '';
+    filtered.forEach(function(item) {
+      html += '<tr>';
+      item.values.forEach(function(val) {
+        html += '<td>' + formatGiaTriHienThi(val) + '</td>';
+      });
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function thongBaoDep(bieuIcon, noiDung) {
+    Swal.fire({
+      icon: bieuIcon, title: noiDung, toast: true, position: 'top-end',
+      showConfirmButton: false, timer: 2000, timerProgressBar: true
+    });
+  }
+
+  // Định dạng an toàn mọi giá trị lấy từ Sheet để hiển thị:
+  // - Nếu là Date (vd cột "Ngày sinh"): format dd/MM/yyyy thay vì in thô kiểu "Tue Dec 13 1961..."
+  // - Nếu null/undefined: trả về chuỗi rỗng
+  // - Còn lại: ép chuỗi bình thường
+  function formatGiaTriHienThi(val) {
+    if (val === undefined || val === null) return '';
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return '';
+      var d = ('0' + val.getDate()).slice(-2);
+      var m = ('0' + (val.getMonth() + 1)).slice(-2);
+      var y = val.getFullYear();
+      return d + '/' + m + '/' + y;
+    }
+    return val.toString();
+  }
+
+  function taiDanhSachGV() {
+    // Lấy giá trị trực tiếp từ ô chọn chung ngoài Trang chủ
+    var selectNamHocEl = document.getElementById('globalSelectNamHoc');
+    var tenSheet = selectNamHocEl ? selectNamHocEl.value : "2627";
+    
+    document.getElementById('tbNhanSuBody').innerHTML = '<tr><td style="text-align: center;">Đang tải dữ liệu...</td></tr>';
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res) {
+          document.getElementById('tbNhanSuBody').innerHTML =
+            '<tr><td style="text-align: center; color:#d32f2f;">Lỗi: Server không trả về dữ liệu.</td></tr>';
+          return;
+        }
+        if (res.loi) {
+          document.getElementById('tbNhanSuBody').innerHTML =
+            '<tr><td style="text-align: center; color:#d32f2f;">Lỗi: ' + res.loi + '</td></tr>';
+          thongBaoDep('error', 'Lỗi: ' + res.loi);
+          return;
+        }
+
+        globalHeaders = res.headers || [];
+        globalDataGV = res.data || [];
+        
+        taoTieuDeBang(globalHeaders);
+        hienThiBangDanhSach(globalDataGV);
+        capNhatDropdownForm(globalDataGV);
+        taoFormInputDong(globalHeaders);
+      })
+      .withFailureHandler(function(err) {
+        var msg = (err && err.message) ? err.message : err;
+        document.getElementById('tbNhanSuBody').innerHTML =
+          '<tr><td style="text-align: center; color:#d32f2f;">Lỗi tải dữ liệu: ' + msg + '</td></tr>';
+        thongBaoDep('error', 'Lỗi tải dữ liệu: ' + msg);
+      })
+      .layDanhSachGVTheoSheet(tenSheet);
+  }
+
+  function taoTieuDeBang(headers) {
+    var tr = '<tr>';
+    headers.forEach(function(h) { tr += '<th>' + h + '</th>'; });
+    tr += '</tr>';
+    document.getElementById('thNhanSu').innerHTML = tr;
+  }
+
+  function hienThiBangDanhSach(data) {
+    var tbody = document.getElementById('tbNhanSuBody');
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="' + globalHeaders.length + '" style="text-align: center;">Chưa có dữ liệu.</td></tr>';
+      return;
+    }
+    var html = '';
+    data.forEach(function(item) {
+      html += '<tr>';
+      item.values.forEach(function(val, idx) {
+        var str = formatGiaTriHienThi(val);
+        var headerName = globalHeaders[idx] ? globalHeaders[idx].toString().toLowerCase() : '';
+
+        if (headerName.includes('điện thoại') || headerName.includes('sđt') || headerName.includes('phone')) {
+          if (str && !str.startsWith('0') && !str.startsWith('+')) {
+            str = '0' + str;
+          }
+        }
+        html += '<td>' + str + '</td>';
+      });
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  // Hàm chuyển đổi chuỗi Tiếng Việt có dấu thành không dấu
+  function boDauTiengViet(str) {
+    if (!str) return '';
+    return str.toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+      .toLowerCase();
+  }
+
+  // Hàm tìm kiếm & Lọc kết hợp (Tìm theo Từ khóa + Tháng sinh + Khối lớp)
+  function timKiemNhanSu() {
+    var rawKeyword = document.getElementById('inputSearch').value.trim();
+    var keywordNoAccents = boDauTiengViet(rawKeyword);
+
+    var selectThangEl = document.getElementById('selectThangSinh');
+    var selectKhoiEl = document.getElementById('selectKhoi');
+
+    var thangChon = selectThangEl ? selectThangEl.value : "";
+    var khoiChon = selectKhoiEl ? selectKhoiEl.value : "";
+
+    // Tìm chỉ số cột Ngày sinh và Cột Lớp
+    var idxNgaySinh = globalHeaders.findIndex(function(h) {
+      return boDauTiengViet(h).includes('ngay sinh');
+    });
+
+    var idxLop = globalHeaders.findIndex(function(h) {
+      var title = boDauTiengViet(h);
+      return title === 'lop' || title.includes('lop');
+    });
+
+    var filtered = globalDataGV.filter(function(item) {
+      // 1. Lọc theo Từ khóa tìm kiếm
+      var textRow = item.values.join(" ");
+      var textRowNoAccents = boDauTiengViet(textRow);
+      var matchKeyword = textRowNoAccents.includes(keywordNoAccents);
+
+      // 2. Lọc theo Tháng sinh
+      var matchThang = true;
+      if (thangChon !== "" && idxNgaySinh !== -1) {
+        var valNgaySinh = formatGiaTriHienThi(item.values[idxNgaySinh]);
+        if (valNgaySinh && valNgaySinh.includes('/')) {
+          var parts = valNgaySinh.split('/');
+          var monthVal = parseInt(parts[1], 10);
+          matchThang = (monthVal === parseInt(thangChon, 10));
+        } else {
+          matchThang = false;
+        }
+      }
+
+      // 3. Lọc theo Khối lớp (VD: Lớp "1A1", "1B0" -> Bắt đầu bằng "1")
+      var matchKhoi = true;
+      if (khoiChon !== "" && idxLop !== -1) {
+        var valLop = (item.values[idxLop] || "").toString().trim();
+        matchKhoi = valLop.startsWith(khoiChon);
+      }
+
+      return matchKeyword && matchThang && matchKhoi;
+    });
+
+    hienThiBangDanhSach(filtered);
+  }
+
+  function capNhatDropdownForm(data) {
+    var select = document.getElementById('selectGVChon');
+    select.innerHTML = '<option value="">-- Thêm nhân sự mới --</option>';
+
+    var nameColIdx = globalHeaders.findIndex(function(h) {
+      var title = h.toString().toLowerCase();
+      return title.includes('họ tên') || title.includes('họ và tên') || title.includes('tên');
+    });
+
+    if (nameColIdx === -1) nameColIdx = 0;
+
+    data.forEach(function(item, index) {
+      var nameVal = item.values[nameColIdx] || 'Nhân sự ' + (index + 1);
+      select.innerHTML += '<option value="' + index + '">' + nameVal + '</option>';
+    });
+  }
+
+  function taoFormInputDong(headers) {
+    var container = document.getElementById('dynamicInputsContainer');
+    container.innerHTML = '';
+
+    headers.forEach(function(header, index) {
+      var div = document.createElement('div');
+      div.className = 'ns-form-group';
+      
+      var label = document.createElement('label');
+      label.innerText = header + ':';
+      div.appendChild(label);
+
+      var headerName = header.toString().trim().toLowerCase();
+      var headerNoAccent = boDauTiengViet(headerName);
+
+      // Các cột chỉ hiển thị, dữ liệu nạp từ Google Sheet, không cho nhập/sửa tay
+      var isKhoaHoanToan = headerNoAccent.includes('stt') ||
+                           headerNoAccent.includes('ma nhan vien') ||
+                           headerNoAccent.includes('tham nien');
+
+      // Đặt đồng bộ ID dạng dynInput_
+      if (headerName === 'xe' || headerName.includes('đi xe')) {
+        var select = document.createElement('select');
+        select.id = 'dynInput_' + index;
+        select.className = 'ns-input-field';
+        select.innerHTML = `
+          <option value="">-- Không --</option>
+          <option value="x">x (Có đi xe)</option>
+        `;
+        if (isKhoaHoanToan) select.disabled = true;
+        div.appendChild(select);
+      } else {
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.id = 'dynInput_' + index;
+        input.className = 'ns-input-field';
+        
+        // Nếu là Ngày sinh -> Chuyển sang ô Chọn Lịch (Datepicker)
+        if (headerNoAccent.includes('ngay sinh') || headerName.includes('ngày sinh')) {
+          input.type = 'date';
+        } else {
+          input.type = 'text';
+          input.placeholder = 'Nhập ' + header;
+        }
+
+        if (isKhoaHoanToan) {
+          input.disabled = true;
+          input.classList.add('ns-input-locked');
+          input.placeholder = '(Tự nạp từ Google Sheet)';
+        }
+        div.appendChild(input);
+      }
+
+      container.appendChild(div);
+    });
+  }
+
+  function doDuLieuVaoForm() {
+    var index = document.getElementById('selectGVChon').value;
+    var btnDelete = document.getElementById('btnXoaGV');
+    
+    if (index === "" || index === undefined) {
+      globalHeaders.forEach(function(_, idx) {
+        var el = document.getElementById('dynInput_' + idx);
+        if (el) el.value = '';
+      });
+      if (btnDelete) btnDelete.style.display = 'none';
+      return;
+    }
+
+    var item = globalDataGV[index];
+    if (item && item.values) {
+      globalHeaders.forEach(function(header, idx) {
+        var el = document.getElementById('dynInput_' + idx);
+        if (el) {
+          var val = formatGiaTriHienThi(item.values[idx]);
+          var headerName = header.toString().trim().toLowerCase();
+          
+          if (headerName === 'xe' || headerName.includes('đi xe')) {
+            el.value = (val.toLowerCase() === 'x') ? 'x' : '';
+          } else if (headerName.includes('ngày sinh') || headerName.includes('ngay sinh')) {
+            el.value = formatToInputDate(val);
+          } else {
+            el.value = val;
+          }
+        }
+      });
+      if (btnDelete) btnDelete.style.display = 'inline-block';
+    }
+  }
+
+  function luuThongTinNhanSu() {
+    // Lấy giá trị trực tiếp từ ô chọn chung ngoài Trang chủ
+    var selectNamHocEl = document.getElementById('globalSelectNamHoc');
+    var tenSheet = selectNamHocEl ? selectNamHocEl.value : "2627";
+    var idx = document.getElementById('selectGVChon').value;
+    var rowValues = [];
+
+    // Lưu ý: ô Ngày sinh là <input type="date">, nên .value của nó LUÔN ở
+    // định dạng ISO "YYYY-MM-DD" (chuẩn của trình duyệt) — không cần và
+    // KHÔNG ĐƯỢC gán ngược chuỗi "DD/MM/YYYY" vào input này, vì input
+    // type="date" sẽ coi đó là giá trị không hợp lệ và tự xóa trắng, khiến
+    // dữ liệu bị đọc thành rỗng ở bước build rowValues bên dưới (đây là
+    // nguyên nhân gây mất Ngày sinh khi Lưu). Việc chuyển sang DD/MM/YYYY
+    // để ghi vào Sheet đã được xử lý đúng bởi formatToSheetDate() bên dưới.
+
+    globalHeaders.forEach(function(headerText, colIdx) {
+      var el = document.getElementById('dynInput_' + colIdx);
+      var val = el ? el.value.trim() : '';
+
+      var headerLower = headerText.toString().toLowerCase();
+      // Nếu là ô Ngày sinh, chuyển YYYY-MM-DD thành DD/MM/YYYY trước khi lưu
+      if (headerLower.includes('ngày sinh') || headerLower.includes('ngay sinh')) {
+        val = formatToSheetDate(val);
+      }
+
+      rowValues.push(val);
+    });
+
+    // Linh hoạt kiểm tra cả rowNum lẫn rowIndex
+    var rowNum = null;
+    if (idx !== "" && globalDataGV[idx]) {
+      rowNum = globalDataGV[idx].rowNum || globalDataGV[idx].rowIndex || null;
+    }
+
+    // Khóa nút Lưu + đổi chữ thành "Đang lưu..." để người dùng biết hệ thống đang xử lý,
+    // tránh cảm giác đứng máy trong lúc chờ Apps Script ghi lên Google Sheet.
+    var btnLuu = document.getElementById('btnLuuNhanSu');
+    var chuNutGoc = btnLuu ? btnLuu.innerHTML : '';
+    if (btnLuu) {
+      btnLuu.disabled = true;
+      btnLuu.innerHTML = '⏳ Đang lưu...';
+    }
+
+    function khoiPhucNutLuu() {
+      if (btnLuu) {
+        btnLuu.disabled = false;
+        btnLuu.innerHTML = chuNutGoc;
+      }
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        khoiPhucNutLuu();
+        if (res.success) {
+          thongBaoDep('success', res.message);
+          taiDanhSachGV();
+          chuyenTabNhanSu('danhSach');
+        } else {
+          thongBaoDep('error', 'Lỗi: ' + res.message);
+        }
+      })
+      .withFailureHandler(function(err) {
+        khoiPhucNutLuu();
+        thongBaoDep('error', 'Lỗi hệ thống: ' + ((err && err.message) ? err.message : err));
+      })
+      .luuNhanSuToSheet(tenSheet, rowValues, rowNum);
+  }
+
+  function xoaNhanSu() {
+    var idx = document.getElementById('selectGVChon').value;
+
+    if (idx === "" || idx === null || idx === undefined) {
+      thongBaoDep('warning', 'Vui lòng chọn 1 nhân sự từ danh sách để xóa!');
+      return;
+    }
+
+    var item = globalDataGV[idx];
+    var rowNum = item.rowNum || item.rowIndex;
+
+    Swal.fire({
+      title: 'Xác nhận xóa?',
+      text: "Cô có chắc chắn muốn xóa nhân sự này không?",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d32f2f',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Đồng ý xóa',
+      cancelButtonText: 'Hủy'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        // Lấy giá trị trực tiếp từ ô chọn chung ngoài Trang chủ
+        var selectNamHocEl = document.getElementById('globalSelectNamHoc');
+        var tenSheet = selectNamHocEl ? selectNamHocEl.value : "2627";
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res.success) {
+              thongBaoDep('success', res.message);
+              taiDanhSachGV();
+              chuyenTabNhanSu('danhSach');
+            } else {
+              thongBaoDep('error', 'Lỗi: ' + res.message);
+            }
+          })
+          .withFailureHandler(function(err) {
+            thongBaoDep('error', 'Lỗi hệ thống: ' + ((err && err.message) ? err.message : err));
+          })
+          .xoaNhanSuFromSheet(tenSheet, rowNum);
+      }
+    });
+  }
+
+// Chuyển DD/MM/YYYY (từ Sheet) -> YYYY-MM-DD (để hiện lên Lịch)
+function formatToInputDate(dateStr) {
+  if (!dateStr) return '';
+  if (dateStr.includes('T')) dateStr = dateStr.split('T')[0]; // Xử lý nếu dạng ISO
+  var parts = dateStr.toString().split('/');
+  if (parts.length === 3) {
+    var day = parts[0].padStart(2, '0');
+    var month = parts[1].padStart(2, '0');
+    var year = parts[2];
+    return year + '-' + month + '-' + day;
+  }
+  return dateStr;
+}
+
+// Chuyển YYYY-MM-DD (từ Lịch) -> DD/MM/YYYY (để lưu vào Sheet)
+function formatToSheetDate(dateStr) {
+  if (!dateStr) return '';
+  var parts = dateStr.toString().split('-');
+  if (parts.length === 3) {
+    return parts[2] + '/' + parts[1] + '/' + parts[0];
+  }
+  return dateStr;
+}
+
+</script>

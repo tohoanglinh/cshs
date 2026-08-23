@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('trong_trua_CSS'); ?>
+  </head>
+  <body>
+
+  <div class="tt-container">
+    <!-- TAB 1: NHẬP -->
+    <div id="tt-tab-nhap" class="tt-tab-content active">
+      <h2>🛌 Nhập lịch trông trưa</h2>
+
+      <div class="tt-form-row">
+        <div class="tt-form-group">
+          <label>Tháng làm việc (dùng để xuất Excel)</label>
+          <input type="month" id="ttThang" onchange="doiThangTrongTrua()">
+        </div>
+        <div class="tt-form-group">
+          <label>Ngày nhập dữ liệu</label>
+          <input type="date" id="ttNgay" onchange="doiNgayTrongTrua()">
+        </div>
+      </div>
+
+      <div class="tt-add-card">
+        <div class="tt-section-title">➕ Thêm người trông trưa cho ngày này</div>
+        <div class="tt-form-row">
+          <div class="tt-form-group" style="flex: 1.6;">
+            <label>Họ và tên</label>
+            <input type="text" id="ttHoTen" list="dsHoTenTT" placeholder="Chọn hoặc gõ tên..." oninput="tuDongDienBoPhan()">
+            <datalist id="dsHoTenTT"></datalist>
+          </div>
+          <div class="tt-form-group">
+            <label>Bộ phận</label>
+            <input type="text" id="ttBoPhan" placeholder="Tự động điền">
+          </div>
+          <div class="tt-form-group">
+            <label>Lớp trông</label>
+            <input type="text" id="ttLop" list="dsLopTT" placeholder="VD: 4A1">
+            <datalist id="dsLopTT"></datalist>
+          </div>
+        </div>
+        <button type="button" class="tt-btn-add" onclick="themNguoiTrongTrua()">➕ Thêm vào danh sách</button>
+      </div>
+
+      <div class="tt-section-title">📋 Danh sách ngày <span id="ttNgayHienThi"></span></div>
+      <div id="ttDanhSachNgay">
+        <div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>
+      </div>
+
+      <div class="tt-action-bar">
+        <button type="button" class="tt-btn-save" id="ttBtnLuu" onclick="luuTrongTrua()">💾 Lưu</button>
+        <button type="button" class="tt-btn-excel" onclick="xuatExcelTrongTrua()">📥 Excel</button>
+      </div>
+    </div>
+
+    <!-- TAB 2: TRA CỨU (chưa phát triển) -->
+    <div id="tt-tab-tracuu" class="tt-tab-content" style="text-align:center; padding: 50px 20px;">
+      <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Tra cứu đang phát triển...</h3>
+    </div>
+
+    <!-- TAB 3: THỐNG KÊ (chưa phát triển) -->
+    <div id="tt-tab-thongke" class="tt-tab-content" style="text-align:center; padding: 50px 20px;">
+      <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Thống kê đang phát triển...</h3>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div class="tt-bottom-nav">
+    <div class="tt-nav-item active" onclick="chuyenTabTrongTrua('nhap')">📋 Nhập</div>
+    <div class="tt-nav-item" onclick="chuyenTabTrongTrua('tracuu')">🕒 Tra cứu</div>
+    <div class="tt-nav-item" onclick="chuyenTabTrongTrua('thongke')">📊 Thống kê</div>
+  </div>
+
+  <?!= include('trong_trua_JS'); ?>
+  </body>
+</html>

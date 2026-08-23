@@ -1,0 +1,39 @@
+<script>
+  // Thêm 2 hàm chuyển trang này vào cuối thẻ <script>:
+  function hienHeaderToTruong(hien) {
+    var el = document.getElementById("globalUserHeader");
+    if (el) el.style.display = hien ? "flex" : "none";
+  }
+
+  function moChucNang(pageId) {
+    document.getElementById("mainPage").style.display = "none";
+    document.getElementById("cshsPage").style.display = "none";
+    document.getElementById("trucCongPage").style.display = "none";
+    document.getElementById("nhanSuPage").style.display = "none";
+    document.getElementById("trongTruaPage").style.display = "none";
+    
+    document.getElementById(pageId).style.display = "block";
+    hienHeaderToTruong(true);
+
+    // Tải lại dữ liệu theo năm học đang chọn mỗi khi vào sub-page,
+    // thay vì chỉ đọc 1 lần lúc trang mở đầu tiên
+    if (pageId === 'cshsPage' && typeof taiDanhSachLopBaoCao === 'function') {
+      taiDanhSachLopBaoCao();
+    } else if (pageId === 'trucCongPage' && typeof taiDuLieuTuSheet === 'function') {
+      taiDuLieuTuSheet();
+    } else if (pageId === 'nhanSuPage' && typeof taiDanhSachGV === 'function') {
+      taiDanhSachGV();
+    } else if (pageId === 'trongTruaPage' && typeof taiDanhSachGVTrongTrua === 'function') {
+      taiDanhSachGVTrongTrua();
+    }
+  }
+
+  function veTrangChu() {
+    document.getElementById("cshsPage").style.display = "none";
+    document.getElementById("trucCongPage").style.display = "none";
+    document.getElementById("nhanSuPage").style.display = "none";
+    document.getElementById("trongTruaPage").style.display = "none";
+    document.getElementById("mainPage").style.display = "block";
+    hienHeaderToTruong(false);
+  }
+</script>

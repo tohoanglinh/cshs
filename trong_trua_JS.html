@@ -1,0 +1,319 @@
+<script>
+  // ==== Biến toàn cục của module Trông trưa ====
+  var ttDanhSachGV = [];      // [{hoTen, boPhan}] toàn bộ nhân sự (tra Bộ phận tự động)
+  var ttDanhSachLop = [];     // Danh sách lớp
+  var ttDanhSachNgayHienTai = []; // [{hoTen, boPhan, lop}] của ngày đang xem/nhập
+
+  // 1. Hàm hỗ trợ định dạng ngày YYYY-MM-DD / YYYY-MM
+  function ttFormatDate(date) {
+    var d = new Date(date), month = '' + (d.getMonth() + 1), day = '' + d.getDate(), year = d.getFullYear();
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+    return [year, month, day].join('-');
+  }
+  function ttFormatThang(date) {
+    var d = new Date(date), month = '' + (d.getMonth() + 1), year = d.getFullYear();
+    if (month.length < 2) month = '0' + month;
+    return year + '-' + month;
+  }
+
+  // 2. Thiết lập mặc định: hôm nay & tháng hiện tại
+  (function ttKhoiTaoMacDinh() {
+    var today = new Date();
+    var elNgay = document.getElementById('ttNgay');
+    var elThang = document.getElementById('ttThang');
+    if (elNgay) elNgay.value = ttFormatDate(today);
+    if (elThang) elThang.value = ttFormatThang(today);
+  })();
+
+  // 3. Chuyển tab (Nhập / Tra cứu / Thống kê)
+  function chuyenTabTrongTrua(tabName) {
+    document.getElementById('tt-tab-nhap').classList.remove('active');
+    document.getElementById('tt-tab-tracuu').classList.remove('active');
+    document.getElementById('tt-tab-thongke').classList.remove('active');
+
+    var navs = document.querySelectorAll('.tt-nav-item');
+    navs.forEach(function(n) { n.classList.remove('active'); });
+
+    if (tabName === 'nhap') {
+      document.getElementById('tt-tab-nhap').classList.add('active');
+      navs[0].classList.add('active');
+    } else if (tabName === 'tracuu') {
+      document.getElementById('tt-tab-tracuu').classList.add('active');
+      navs[1].classList.add('active');
+    } else if (tabName === 'thongke') {
+      document.getElementById('tt-tab-thongke').classList.add('active');
+      navs[2].classList.add('active');
+    }
+  }
+
+  var ttDanhSachGV = []; // Biến lưu danh sách nhân sự toàn cục
+
+  // 4. Tải danh sách nhân sự (Họ tên + Bộ phận) & danh sách lớp theo năm học đang chọn
+  function taiDanhSachGVTrongTrua() {
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        ttDanhSachGV = (res && res.dsgv) || [];
+        ttDanhSachLop = (res && res.dsLop) || [];
+
+        var dlHoTen = document.getElementById('dsHoTenTT');
+        dlHoTen.innerHTML = ttDanhSachGV.map(function(gv) {
+          return '<option value="' + gv.hoTen + '">';
+        }).join('');
+
+        var dlLop = document.getElementById('dsLopTT');
+        dlLop.innerHTML = ttDanhSachLop.map(function(l) {
+          return '<option value="' + l + '">';
+        }).join('');
+      })
+      .withFailureHandler(function(err) {
+        console.error('Lỗi tải danh sách nhân sự Trông trưa: ', err);
+      })
+      .layDSGVChoTrongTrua(maNamHoc);
+
+    // Đồng thời tải luôn dữ liệu ngày đang chọn
+    doiNgayTrongTrua();
+  }
+
+  // 5. Tự động điền Bộ phận khi gõ/chọn Họ và tên
+  function tuDongDienBoPhan() {
+    var ten = document.getElementById('ttHoTen').value.trim().toLowerCase();
+    var elBoPhan = document.getElementById('ttBoPhan');
+    if (!ten) { elBoPhan.value = ''; return; }
+
+    var found = ttDanhSachGV.find(function(gv) {
+      return (gv.hoTen || '').trim().toLowerCase() === ten;
+    });
+    elBoPhan.value = found ? (found.boPhan || '') : '';
+  }
+
+  // 6. Khi đổi Ngày nhập -> tải lại danh sách đã lưu của ngày đó, đồng bộ Tháng
+  function doiNgayTrongTrua() {
+    var ngayVal = document.getElementById('ttNgay').value;
+    if (!ngayVal) return;
+
+    // Đồng bộ ô Tháng theo Ngày đang chọn
+    var elThang = document.getElementById('ttThang');
+    var thangCuaNgay = ngayVal.substring(0, 7);
+    if (elThang && elThang.value !== thangCuaNgay) elThang.value = thangCuaNgay;
+
+    document.getElementById('ttNgayHienThi').innerText = formatNgayHienThiTT(ngayVal);
+
+    var maNamHoc = maNamHocHienTai();
+    document.getElementById('ttDanhSachNgay').innerHTML = '<div class="tt-empty">Đang tải dữ liệu...</div>';
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        ttDanhSachNgayHienTai = res || [];
+        renderDanhSachNgayTT();
+      })
+      .withFailureHandler(function(err) {
+        ttDanhSachNgayHienTai = [];
+        renderDanhSachNgayTT();
+      })
+      .layTrongTruaTheoNgay(ngayVal, maNamHoc);
+  }
+
+  // 7. Khi đổi Tháng làm việc (chỉ ảnh hưởng tới Excel + để tiện chọn Ngày trong tháng đó)
+  function doiThangTrongTrua() {
+    var thangVal = document.getElementById('ttThang').value;
+    var elNgay = document.getElementById('ttNgay');
+    if (!thangVal || !elNgay.value) return;
+
+    // Nếu Ngày hiện tại không thuộc Tháng vừa chọn -> đưa Ngày về ngày 1 của tháng đó
+    if (elNgay.value.substring(0, 7) !== thangVal) {
+      elNgay.value = thangVal + '-01';
+      doiNgayTrongTrua();
+    }
+  }
+
+  function formatNgayHienThiTT(ngayStr) {
+    var p = ngayStr.split('-');
+    if (p.length !== 3) return ngayStr;
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  // 8. Thêm 1 người vào danh sách của ngày đang chọn (chưa lưu server, chỉ ở giao diện)
+  function themNguoiTrongTrua() {
+    var hoTen = document.getElementById('ttHoTen').value.trim();
+    var boPhan = document.getElementById('ttBoPhan').value.trim();
+    var lop = document.getElementById('ttLop').value.trim();
+
+    if (!hoTen) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng nhập Họ và tên!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+    if (!lop) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng nhập Lớp trông trưa!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    // 1. KIỂM TRA TRÙNG LỚP TRONG NGÀY
+    var idxTrungLop = ttDanhSachNgayHienTai.findIndex(function(item) {
+      return (item.lop || '').trim().toLowerCase() === lop.toLowerCase();
+    });
+
+    if (idxTrungLop !== -1) {
+      var nguoiDangTrong = ttDanhSachNgayHienTai[idxTrungLop].hoTen;
+      // Nếu lớp đó đã có người khác đăng ký -> Báo lỗi và chặn lại
+      if ((nguoiDangTrong || '').trim().toLowerCase() !== hoTen.toLowerCase()) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Trùng lớp trông!',
+          text: 'Lớp ' + lop + ' đã có ' + nguoiDangTrong + ' đăng ký trông rồi.',
+          confirmButtonColor: '#f59e0b',
+          confirmButtonText: 'Đã hiểu'
+        });
+        return;
+      }
+    }
+
+    // 2. Nếu người này đã có trong danh sách -> cập nhật lại Lớp/Bộ phận
+    var idxTrung = ttDanhSachNgayHienTai.findIndex(function(item) {
+      return (item.hoTen || '').trim().toLowerCase() === hoTen.toLowerCase();
+    });
+
+    if (idxTrung !== -1) {
+      ttDanhSachNgayHienTai[idxTrung].boPhan = boPhan;
+      ttDanhSachNgayHienTai[idxTrung].lop = lop;
+    } else {
+      ttDanhSachNgayHienTai.push({ hoTen: hoTen, boPhan: boPhan, lop: lop });
+    }
+
+    renderDanhSachNgayTT();
+
+    // Xóa trắng ô nhập để nhập tiếp
+    document.getElementById('ttHoTen').value = '';
+    document.getElementById('ttBoPhan').value = '';
+    document.getElementById('ttLop').value = '';
+    document.getElementById('ttHoTen').focus();
+  }
+
+  // 9. Vẽ lại bảng danh sách của ngày đang chọn
+  function renderDanhSachNgayTT() {
+    var box = document.getElementById('ttDanhSachNgay');
+
+    if (!ttDanhSachNgayHienTai || ttDanhSachNgayHienTai.length === 0) {
+      box.innerHTML = '<div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>';
+      return;
+    }
+
+    var html = '<div class="tt-table-wrap"><table class="tt-table"><thead><tr>' +
+      '<th>Họ và tên</th><th>Bộ phận</th><th>Lớp</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    ttDanhSachNgayHienTai.forEach(function(item, idx) {
+      html += '<tr>' +
+        '<td>' + item.hoTen + '</td>' +
+        '<td>' + (item.boPhan || '') + '</td>' +
+        '<td class="tt-col-lop">' + (item.lop || '') + '</td>' +
+        '<td><button type="button" class="tt-btn-remove" onclick="xoaDongTrongTrua(' + idx + ')">Xóa</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+  }
+
+  // 10. Xóa 1 dòng khỏi danh sách của ngày (chỉ trên giao diện, cần bấm Lưu để áp dụng)
+  function xoaDongTrongTrua(idx) {
+    ttDanhSachNgayHienTai.splice(idx, 1);
+    renderDanhSachNgayTT();
+  }
+
+  // 11. Lưu toàn bộ danh sách của ngày đang chọn lên Sheet (ghi đè đúng ngày đó)
+  function luuTrongTrua() {
+    var ngayVal = document.getElementById('ttNgay').value;
+    if (!ngayVal) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn Ngày trước khi lưu!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    var btn = document.getElementById('ttBtnLuu');
+    btn.disabled = true;
+    btn.innerText = 'Đang lưu...';
+
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run
+      .withSuccessHandler(function(msg) {
+        btn.disabled = false;
+        btn.innerText = '💾 Lưu';
+        Swal.fire({
+          icon: 'success', title: 'Thành công!', text: msg || 'Đã lưu danh sách trông trưa!',
+          confirmButtonColor: '#1b8754', confirmButtonText: 'Đồng ý'
+        });
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.innerText = '💾 Lưu';
+        Swal.fire({ icon: 'error', title: 'Lỗi khi lưu!', text: err, confirmButtonColor: '#d33' });
+      })
+      .luuTrongTruaTheoNgay(ngayVal, maNamHoc, ttDanhSachNgayHienTai);
+  }
+
+  // 12. Xuất Excel bảng chấm công trông trưa cho cả THÁNG đang chọn
+  function xuatExcelTrongTrua() {
+    var thangVal = document.getElementById('ttThang').value; // yyyy-MM
+    if (!thangVal) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn Tháng làm việc trước khi xuất Excel!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    var maNamHoc = maNamHocHienTai();
+
+    var newTab = window.open('about:blank', '_blank');
+    if (newTab) {
+      newTab.document.write(
+        '<!DOCTYPE html><html><head><title>Đang tải bảng chấm công...</title><meta charset="utf-8">' +
+        '<style>' +
+        '  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f6f9; }' +
+        '  .card { background: #fff; padding: 35px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 420px; }' +
+        '  .spinner { border: 4px solid #ffe0b2; border-top: 4px solid #e65100; border-radius: 50%; width: 45px; height: 45px; animation: spin 0.9s linear infinite; margin: 0 auto 18px auto; }' +
+        '  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }' +
+        '  h3 { color: #e65100; margin: 0 0 10px 0; font-size: 20px; }' +
+        '  p { color: #6c757d; font-size: 14px; margin: 0; line-height: 1.5; }' +
+        '  .btn { display: inline-block; margin-top: 15px; padding: 10px 20px; background: #e65100; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; }' +
+        '</style></head><body>' +
+        '  <div class="card">' +
+        '    <div class="spinner" id="iconSpinner"></div>' +
+        '    <h3 id="txtTitle">⏳ Đang tạo bảng chấm công</h3>' +
+        '    <p id="txtDesc">Dữ liệu đang được tổng hợp theo tháng. Cô vui lòng đợi giây lát...</p>' +
+        '    <div id="btnContainer"></div>' +
+        '  </div>' +
+        '</body></html>'
+      );
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          if (newTab) {
+            newTab.document.getElementById('iconSpinner').style.display = 'none';
+            newTab.document.getElementById('txtTitle').innerText = "✅ Tải file thành công!";
+            newTab.document.getElementById('txtDesc').innerHTML = "File <b>" + res.fileName + "</b> đang tự động tải xuống thư mục Downloads.";
+            newTab.document.getElementById('btnContainer').innerHTML =
+              '<a href="' + res.downloadUrl + '" class="btn">Click vào đây nếu file chưa tải về</a>';
+            newTab.location.href = res.downloadUrl;
+          }
+
+          setTimeout(function() {
+            google.script.run.xoaSheetTam(res.tempSheetName, res.maNamHoc);
+          }, 12000);
+        } else {
+          if (newTab) newTab.close();
+          Swal.fire({ icon: 'error', title: 'Thất bại', text: 'Không thể tạo dữ liệu xuất file.', confirmButtonColor: '#d33' });
+        }
+      })
+      .withFailureHandler(function(err) {
+        if (newTab) newTab.close();
+        Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
+      })
+      .xuatFileTrongTruaChuan(thangVal, maNamHoc);
+  }
+
+  // Khởi động module khi trang được nhúng vào DOM
+  taiDanhSachGVTrongTrua();
+</script>

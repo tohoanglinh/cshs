@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('bao_cao_cshs_CSS'); ?>
+  </head>
+  <body>
+
+  <div class="container">
+    <!-- TAB 1: NHẬP -->
+    <div id="tab-nhap" class="tab-content active">
+      <h2>Nhập báo cáo CSHS</h2>
+      <div class="form-group"><label>Ngày</label><input type="date" id="ngay"></div>
+      <div class="form-group"><label>Lớp</label><select id="lop"><option value="">Đang tải danh sách lớp...</option></select></div>
+
+      <div class="section-title">Quản lý giờ ăn</div>
+      <div class="chips-group" data-field="viPhamGioAn">Đang tải...</div>
+      <textarea id="ghichuGioAn" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Quản lý giờ ngủ</div>
+      <div class="chips-group" data-field="viPhamGioNgu">Đang tải...</div>
+      <textarea id="ghichuGioNgu" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Báo cơm & trang trí lớp</div>
+      <div class="chips-group" data-field="viPhamBaoCom">Đang tải...</div>
+      <textarea id="ghichuBaoCom" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Công tác phối hợp</div>
+      <textarea id="ghichuPhoiHop" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Công tác vệ sinh</div>
+      <div class="chips-group" data-field="viPhamVeSinh">Đang tải...</div>
+      <textarea id="ghichuVeSinh" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Phát triển bản thân</div>
+      <div class="chips-group" data-field="viPhamBanThan">Đang tải...</div>
+      <textarea id="ghichuBanThan" placeholder="Ghi chú thêm..."></textarea>
+
+      <div class="section-title">Văn hóa tổ chức</div>
+      <div class="chips-group" data-field="viPhamVanHoa">Đang tải...</div>
+      <textarea id="ghichuVanHoa" placeholder="Ghi chú thêm..."></textarea>
+
+      <button class="btn-submit" id="btnSubmit" onclick="luuBaoCao()">Lưu báo cáo</button>
+    </div>
+
+    <!-- TAB 2: TRA CỨU -->
+    <div id="tab-tracuu" class="tab-content">
+      <h2>Tra cứu báo cáo</h2>
+      <div class="form-group"><label>Từ ngày</label><input type="date" id="filterTuNgay" onchange="tracuuData()"></div>
+      <div class="form-group"><label>Đến ngày</label><input type="date" id="filterDenNgay" onchange="tracuuData()"></div>
+      <div class="form-group"><label>Lớp</label><select id="filterLop" onchange="tracuuData()"><option value="Tất cả lớp">Tất cả lớp</option></select></div>
+
+      <div class="action-bar">
+        <span id="countText" style="font-weight: 500; font-size: 13px; color: #666;">0 báo cáo</span>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn-action btn-excel" onclick="taiExcel()">📥 Excel</button>
+          <button class="btn-action btn-delete" onclick="xoaBaoCao()">🗑️ Xóa</button>
+        </div>
+      </div>
+
+      <div id="listBaoCao">Vui lòng chọn Từ ngày và Đến ngày để tra cứu.</div>
+
+      <!-- Thanh phân trang (Thêm mới) -->
+      <div class="pagination-container" id="paginationBox" style="display: none;">
+        <button class="pagination-btn" id="btnPrevPage" onclick="changePage(-1)">❮ Trang trước</button>
+        <span class="pagination-info" id="pageInfo">Trang 1 / 1</span>
+        <button class="pagination-btn" id="btnNextPage" onclick="changePage(1)">Trang sau ❯</button>
+      </div>
+    </div>
+
+    <!-- TAB 3: THỐNG KÊ -->
+    <div id="tab-thongke" class="tab-content">
+      <h2>Thống kê tổng hợp</h2>
+      
+      <div class="form-group"><label>Từ ngày</label><input type="date" id="tkTuNgay" onchange="taiThongKe()"></div>
+      <div class="form-group"><label>Đến ngày</label><input type="date" id="tkDenNgay" onchange="taiThongKe()"></div>
+
+      <div class="section-title">🔥 Top 5 lỗi hay gặp nhất</div>
+      <div class="stat-box" id="boxTopLoi">Chọn khoảng thời gian để xem thống kê.</div>
+
+      <div class="section-title">🏫 Top 5 lớp nhắc nhở nhiều nhất</div>
+      <div class="stat-box" id="boxTopLop">Chọn khoảng thời gian để xem thống kê.</div>
+
+      <!-- THÊM MỚI: Top 5 lớp nhắc nhở ít nhất -->
+      <div class="section-title">🌟 Top 5 lớp nhắc nhở ít nhất</div>
+      <div class="stat-box" id="boxTopLopItNhat">Chọn khoảng thời gian để xem thống kê.</div>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('nhap')">📋 Nhập</div>
+    <div class="nav-item" onclick="switchTab('tracuu')">🕒 Tra cứu</div>
+    <div class="nav-item" onclick="switchTab('thongke')">📊 Thống kê</div>
+  </div>
+
+  <?!= include('bao_cao_cshs_JS'); ?>
+  </body>
+</html>

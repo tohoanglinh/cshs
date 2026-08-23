@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('truc_cong_CSS'); ?>
+  </head>
+  <body>
+<div class="tc-container"> 
+  <div class="tc-header">
+    <div class="tc-title">Phân Công Trực Cổng</div>
+    <div class="tc-week-selector">
+      <span><b>Tuần từ:</b></span>
+      <input type="date" id="tcTuNgay" onchange="kiemTraDoiTuan()">
+      <span>➜</span>
+      <span id="tcDenNgayText" style="font-weight: bold; color: #0d47a1;">--/--/----</span>
+    </div>
+  </div>
+
+  <div class="tc-table-wrap">
+  <table class="tc-table">
+    <thead>
+      <tr>
+        <th>Thứ</th>
+        <th>Ngày</th>
+        <th>Cổng 1</th>
+        <th>Cổng 2</th>
+      </tr>
+    </thead>
+    <tbody id="tcTableBody">
+      <!-- Dữ liệu hiển thị -->
+    </tbody>
+  </table>
+  </div>
+
+  <div id="tcLoading" class="tc-loading-overlay" style="display: none;">
+    <div class="tc-spinner"></div>
+    <span>Đang tải dữ liệu, chờ chút nhé...</span>
+  </div>
+
+  <div class="tc-btn-group photo-mode">
+    <button type="button" id="btnSua" class="tc-btn-edit" onclick="suaPhanCong()">✏️ Sửa</button>
+    <button type="button" id="btnHuy" class="tc-btn-cancel" onclick="huySuaPhanCong()">✖ Hủy</button>
+    <button type="button" id="btnLuu" class="tc-btn-save" onclick="luuPhanCong()" disabled>💾 Lưu</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?!= include('truc_cong_JS'); ?>
+  </body>
+</html>

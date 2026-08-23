@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <?!= include('Index_CSS'); ?>
+</head>
+<body>
+
+  <?!= include('header_user'); ?>
+
+  <!-- MÀN HÌNH 1: TRANG CHỦ -->
+  <div id="mainPage" class="screen-page active-page">
+    <div style="text-align: center; margin: 20px 0;">
+      <h2>Hệ Thống Quản Lý CSHS</h2>
+      
+      <!-- HỘP CHỌN NĂM HỌC CHUNG -->
+      <div style="margin-top: 15px;">
+        <label for="globalSelectNamHoc"><b>Năm học làm việc: </b></label>
+        <select id="globalSelectNamHoc" style="padding: 6px 12px; border-radius: 20px; border: 1px solid #2e7d32; font-weight: bold; color: #2e7d32;">
+          <option value="2627" selected>2026 - 2027</option>
+          <option value="2728">2027 - 2028</option>
+        </select>
+      </div>
+
+      <p style="margin-top: 15px; color: #555;">Chọn chức năng làm việc</p>
+    </div>
+
+    <div class="menu-grid">
+      <!-- Nút 1: Báo cáo CSHS -->
+      <button class="menu-card" onclick="moChucNang('cshsPage')">
+        <div class="card-icon">📋</div>
+        <p class="card-title">Báo cáo CSHS</p>
+      </button>
+
+      <!-- Nút 2: Trực cổng -->
+      <button class="menu-card" onclick="moChucNang('trucCongPage')">
+        <div class="card-icon">🚪</div>
+        <p class="card-title">Trực cổng</p>
+      </button>
+
+      <!-- Nút 3: Nhân sự -->
+      <button class="menu-card" onclick="moChucNang('nhanSuPage')">
+        <div class="card-icon">👩‍🏫</div>
+        <p class="card-title">Nhân sự</p>
+      </button>
+
+      <!-- Nút 4: Trông trưa -->
+      <button class="menu-card" onclick="moChucNang('trongTruaPage')">
+        <div class="card-icon">🛌</div>
+        <p class="card-title">Trông trưa</p>
+      </button>
+    </div>
+  </div>
+
+  <!-- MÀN HÌNH 2: BÁO CÁO CSHS (NHÚNG FILE VÀO) -->
+  <div id="cshsPage" class="screen-page" style="display: none;">
+    <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChu()">⬅ Trang chủ</button>
+    <?!= include('bao_cao_cshs'); ?>
+  </div>
+
+  <!-- MÀN HÌNH 3: TRỰC CỔNG -->
+  <div id="trucCongPage" class="screen-page" style="display: none;">
+    <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChuTrucCong()">⬅ Trang chủ</button>
+    <?!= include('truc_cong'); ?>
+  </div>
+
+  <!-- MÀN HÌNH 4: NHÂN SỰ -->
+  <div id="nhanSuPage" class="screen-page" style="display: none;">
+    <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChu()">⬅ Trang chủ</button>
+    <?!= include('nhan_su'); ?>
+  </div>
+
+  <!-- MÀN HÌNH 5: TRÔNG TRƯA -->
+  <div id="trongTruaPage" class="screen-page" style="display: none;">
+    <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChu()">⬅ Trang chủ</button>
+    <?!= include('trong_trua'); ?>
+  </div>
+
+<?!= include('Index_JS'); ?>
+</body>
+</html>

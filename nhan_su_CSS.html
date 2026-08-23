@@ -1,0 +1,174 @@
+<style>
+  .ns-container { 
+    max-width: 960px; 
+    margin: 0 auto; 
+    padding: 15px 15px 80px 15px; 
+    font-family: Arial, sans-serif; 
+    box-sizing: border-box;
+  }
+  
+  .ns-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 15px; 
+    background: #fff; 
+    padding: 12px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+  }
+  
+  .ns-select-year { 
+    padding: 6px 12px; 
+    border-radius: 20px; 
+    border: 1px solid #ccc; 
+    font-weight: bold; 
+    color: #2c3e50; 
+  }
+  
+  .table-responsive { 
+    width: 100%;
+    overflow-x: auto; 
+    -webkit-overflow-scrolling: touch;
+    background: #fff; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+    border: 1px solid #e0e0e0;
+  }
+
+  .table-responsive::-webkit-scrollbar {
+    height: 8px;
+  }
+  .table-responsive::-webkit-scrollbar-thumb {
+    background: #2e7d32;
+    border-radius: 4px;
+  }
+  .table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  
+  .ns-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    white-space: nowrap; 
+  }
+  
+  .ns-table th, .ns-table td { 
+    padding: 12px 16px; 
+    text-align: left; 
+    border-bottom: 1px solid #eee; 
+    min-width: 120px; 
+  }
+  
+  .ns-table th { 
+    background-color: #2e7d32; 
+    color: white; 
+    position: sticky;
+    top: 0;
+  }
+  
+  .search-box { 
+    width: 100%; 
+    padding: 10px 15px; 
+    border: 1px solid #ccc; 
+    border-radius: 20px; 
+    margin-bottom: 12px; 
+    box-sizing: border-box; 
+  }
+
+  .ns-card-form { 
+    background: #fff; 
+    padding: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+  }
+
+  #dynamicInputsContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+    gap: 15px;
+    margin-top: 15px;
+  }
+  
+  .ns-form-group { 
+    margin-bottom: 5px; 
+  }
+  .ns-form-group label { 
+    display: block; 
+    font-weight: bold; 
+    margin-bottom: 5px; 
+    color: #333; 
+  }
+  .ns-form-group input, .ns-form-group select { 
+    width: 100%; 
+    padding: 9px 12px; 
+    border: 1px solid #ccc; 
+    border-radius: 6px; 
+    box-sizing: border-box; 
+  }
+
+  .ns-input-locked,
+  .ns-input-locked:disabled {
+    background-color: #f0f0f0;
+    color: #777;
+    cursor: not-allowed;
+    border-color: #ddd;
+  }
+  
+  .ns-btn-group { 
+    display: flex; 
+    gap: 10px; 
+    margin-top: 20px; 
+  }
+  .btn-submit { 
+    flex: 1; 
+    padding: 11px; 
+    background: #2e7d32; 
+    color: white; 
+    border: none; 
+    border-radius: 6px; 
+    font-weight: bold; 
+    font-size: 15px;
+    cursor: pointer; 
+  }
+  .btn-delete { 
+    background: #d32f2f; 
+    color: white; 
+    border: none; 
+    padding: 11px 20px; 
+    border-radius: 6px; 
+    font-weight: bold; 
+    font-size: 15px;
+    cursor: pointer; 
+  }
+
+  .ns-nav-bar {
+    position: fixed; 
+    bottom: 15px; 
+    left: 50%; 
+    transform: translateX(-50%);
+    background: #ffffff; 
+    display: flex; 
+    padding: 6px 12px; 
+    border-radius: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+    z-index: 1000; 
+    gap: 15px; 
+    border: 1px solid #e0e0e0;
+  }
+  .ns-nav-btn {
+    border: none; 
+    background: transparent; 
+    padding: 8px 20px; 
+    border-radius: 20px;
+    font-size: 14px; 
+    font-weight: bold; 
+    color: #555; 
+    cursor: pointer; 
+    transition: all 0.2s ease;
+  }
+  .ns-nav-btn.active { 
+    background-color: #e8f5e9; 
+    color: #2e7d32; 
+  }
+</style>
