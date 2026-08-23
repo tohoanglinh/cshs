@@ -34,7 +34,7 @@
       }
       if (document.getElementById('tabThongKe')) {
         document.getElementById('tabThongKe').style.display = 'block';
-        locThongKeNhanSu(); // Tự động chạy lọc dữ liệu khi bật tab
+        renderThongKeNhanSu(); // Vẽ số liệu tổng quan + biểu đồ khi bật tab
       }
     }
   }
@@ -161,6 +161,12 @@
         hienThiBangDanhSach(globalDataGV);
         capNhatDropdownForm(globalDataGV);
         taoFormInputDong(globalHeaders);
+
+        // Nếu đang mở sẵn tab Thống kê (vd: vừa đổi năm học) -> vẽ lại số liệu/biểu đồ theo dữ liệu mới
+        var tabTK = document.getElementById('tabThongKe');
+        if (tabTK && tabTK.style.display === 'block') {
+          renderThongKeNhanSu();
+        }
       })
       .withFailureHandler(function(err) {
         var msg = (err && err.message) ? err.message : err;
@@ -507,6 +513,226 @@ function formatToSheetDate(dateStr) {
     return parts[2] + '/' + parts[1] + '/' + parts[0];
   }
   return dateStr;
+}
+
+/* =====================================================================
+   TAB THỐNG KÊ: Thẻ số liệu tổng quan + Biểu đồ Trình độ + Thâm niên
+   ===================================================================== */
+
+var nsChartInstances = {}; // Lưu instance Chart.js theo canvasId để hủy trước khi vẽ lại
+
+// Tách "8 năm 11 tháng" -> số năm dạng thập phân (8 + 11/12). Trả về null nếu không đọc được.
+function nsParseThamNienNam(str) {
+  if (!str) return null;
+  var mNam = str.match(/(\d+)\s*n[ăa]m/i);
+  var mThang = str.match(/(\d+)\s*th[áa]ng/i);
+  if (!mNam && !mThang) return null;
+  var namVal = mNam ? parseInt(mNam[1], 10) : 0;
+  var thangVal = mThang ? parseInt(mThang[1], 10) : 0;
+  return namVal + thangVal / 12;
+}
+
+// Chuỗi "dd/MM/yyyy" (đã qua formatGiaTriHienThi) -> đối tượng Date. Trả về null nếu không hợp lệ.
+function nsParseNgaySinh(str) {
+  if (!str || str.indexOf('/') === -1) return null;
+  var p = str.split('/');
+  if (p.length !== 3) return null;
+  var d = new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Tính tuổi hiện tại từ ngày sinh (Date)
+function nsTinhTuoi(ngaySinh) {
+  var today = new Date();
+  var tuoi = today.getFullYear() - ngaySinh.getFullYear();
+  var chuaToiSinhNhat = (today.getMonth() < ngaySinh.getMonth()) ||
+    (today.getMonth() === ngaySinh.getMonth() && today.getDate() < ngaySinh.getDate());
+  if (chuaToiSinhNhat) tuoi--;
+  return tuoi;
+}
+
+// Phân loại 1 chuỗi Trình độ (vd "Đại học sư phạm", "TC Tổng hợp Hà Nội", "ĐH BKHN") vào 1 trong 5 nhóm
+function nsPhanLoaiTrinhDo(str) {
+  var s = boDauTiengViet(str);
+  if (!s) return null;
+  if (s.indexOf('dai hoc') !== -1 || /(^|\s)dh(\s|$)/.test(s)) return 'Đại học';
+  if (s.indexOf('cao dang') !== -1 || /(^|\s)cd(\s|$)/.test(s)) return 'Cao đẳng';
+  if (s.indexOf('trung cap') !== -1 || /(^|\s)tc(\s|$)/.test(s)) return 'Trung cấp';
+  if (s.indexOf('thpt') !== -1) return 'THPT';
+  return 'Khác';
+}
+
+function renderThongKeNhanSu() {
+  // An toàn: nếu khối Thống kê chưa có trên DOM thì bỏ qua
+  if (!document.getElementById('tkTongSoNhanSu')) return;
+
+  var idxTrinhDo = globalHeaders.findIndex(function(h) { return boDauTiengViet(h).includes('trinh do'); });
+  var idxThamNien = globalHeaders.findIndex(function(h) { return boDauTiengViet(h).includes('tham nien'); });
+  var idxNgaySinh = globalHeaders.findIndex(function(h) { return boDauTiengViet(h).includes('ngay sinh'); });
+
+  var tongSo = globalDataGV.length;
+  document.getElementById('tkTongSoNhanSu').innerText = tongSo;
+
+  // ----- Thẻ: Tuổi trung bình -----
+  var tongTuoi = 0, demTuoi = 0;
+  if (idxNgaySinh !== -1) {
+    globalDataGV.forEach(function(item) {
+      var raw = item.values[idxNgaySinh];
+      var d = (raw instanceof Date) ? raw : nsParseNgaySinh(formatGiaTriHienThi(raw));
+      if (d) { tongTuoi += nsTinhTuoi(d); demTuoi++; }
+    });
+  }
+  document.getElementById('tkTuoiTrungBinh').innerText = demTuoi > 0 ? (tongTuoi / demTuoi).toFixed(1) : '--';
+
+  // ----- Thẻ: Thâm niên trung bình + nhóm cho biểu đồ cột -----
+  var tongNam = 0, demNam = 0;
+  var nhomThamNien = { '< 1 năm': 0, '1 - 3 năm': 0, '3 - 5 năm': 0, '5 - 10 năm': 0, '≥ 10 năm': 0 };
+  if (idxThamNien !== -1) {
+    globalDataGV.forEach(function(item) {
+      var soNam = nsParseThamNienNam(formatGiaTriHienThi(item.values[idxThamNien]));
+      if (soNam === null) return;
+      tongNam += soNam; demNam++;
+      if (soNam < 1) nhomThamNien['< 1 năm']++;
+      else if (soNam < 3) nhomThamNien['1 - 3 năm']++;
+      else if (soNam < 5) nhomThamNien['3 - 5 năm']++;
+      else if (soNam < 10) nhomThamNien['5 - 10 năm']++;
+      else nhomThamNien['≥ 10 năm']++;
+    });
+  }
+  document.getElementById('tkThamNienTrungBinh').innerText = demNam > 0 ? (tongNam / demNam).toFixed(1) : '--';
+
+  // ----- Biểu đồ tròn: Trình độ -----
+  var nhomTrinhDo = { 'Đại học': 0, 'Cao đẳng': 0, 'Trung cấp': 0, 'THPT': 0, 'Khác': 0 };
+  var danhSachTrinhDo = { 'Đại học': [], 'Cao đẳng': [], 'Trung cấp': [], 'THPT': [], 'Khác': [] };
+  var coDuLieuTrinhDo = false;
+
+  if (idxTrinhDo !== -1) {
+    globalDataGV.forEach(function(item) {
+      var valGoc = formatGiaTriHienThi(item.values[idxTrinhDo]);
+      var nhom = nsPhanLoaiTrinhDo(valGoc);
+      if (nhom) { 
+        nhomTrinhDo[nhom]++; 
+        coDuLieuTrinhDo = true; 
+
+        // Lưu tên và giá trị gốc (thay item.ten bằng thuộc tính chứa Tên thực tế trong project)
+        var tenHienThi = item.ten || item.hoTen || (typeof idxHoTen !== 'undefined' ? item.values[idxHoTen] : 'N/A');
+        danhSachTrinhDo[nhom].push({
+            ten: tenHienThi,
+            valGoc: valGoc
+        });
+      }
+    });
+  }
+
+  nsVeBieuDoTron('chartTrinhDo', 'chartTrinhDoEmpty', nhomTrinhDo, coDuLieuTrinhDo, danhSachTrinhDo);
+
+  // ----- Biểu đồ cột: Thâm niên -----
+  nsVeBieuDoCot('chartThamNien', 'chartThamNienEmpty', nhomThamNien, demNam > 0);
+}
+
+function nsVeBieuDoTron(canvasId, emptyElId, dataObj, coDuLieu, detailsObj) {
+  var canvas = document.getElementById(canvasId);
+  var emptyEl = document.getElementById(emptyElId);
+  if (!canvas) return;
+
+  if (nsChartInstances[canvasId]) {
+    nsChartInstances[canvasId].destroy();
+    delete nsChartInstances[canvasId];
+  }
+
+  if (!coDuLieu) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var mauSac = { 'Đại học': '#2e7d32', 'Cao đẳng': '#66bb6a', 'Trung cấp': '#ffb74d', 'THPT': '#42a5f5', 'Khác': '#bdbdbd' };
+  var labels = [], data = [], colors = [];
+  Object.keys(dataObj).forEach(function(k) {
+      if (dataObj[k] > 0) { labels.push(k); data.push(dataObj[k]); colors.push(mauSac[k] || '#90a4ae'); }
+  });
+
+  nsChartInstances[canvasId] = new Chart(canvas, {
+    type: 'pie',
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        // Gắn sự kiện click vào lát cắt biểu đồ
+        onClick: function(evt, elements) {
+          if (elements && elements.length > 0) {
+            var index = elements[0].index;
+            var tenNhom = labels[index];
+            var danhSach = detailsObj ? detailsObj[tenNhom] : [];
+            
+            nsHienThiChiTietNhom(tenNhom, danhSach);
+          }
+        },
+
+        plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  var tong = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                  var pct = tong > 0 ? ((ctx.parsed / tong) * 100).toFixed(1) : 0;
+                  return ctx.label + ': ' + ctx.parsed + ' người (' + pct + '%)';
+                }
+              }
+            }
+        }
+    }
+  });
+}
+
+function nsVeBieuDoCot(canvasId, emptyElId, dataObj, coDuLieu) {
+  var canvas = document.getElementById(canvasId);
+  var emptyEl = document.getElementById(emptyElId);
+  if (!canvas) return;
+
+  if (nsChartInstances[canvasId]) {
+    nsChartInstances[canvasId].destroy();
+    delete nsChartInstances[canvasId];
+  }
+
+  if (!coDuLieu) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  var labels = Object.keys(dataObj);
+  var data = labels.map(function(k) { return dataObj[k]; });
+
+  nsChartInstances[canvasId] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Số người', data: data, backgroundColor: '#2e7d32', borderRadius: 6, maxBarThickness: 46 }] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+    }
+  });
+}
+
+function nsHienThiChiTietNhom(tenNhom, danhSach) {
+    if (!danhSach || danhSach.length === 0) {
+        alert('Không có dữ liệu chi tiết cho nhóm: ' + tenNhom);
+        return;
+    }
+
+    var noiDung = 'NHÓM "' + tenNhom.toUpperCase() + '" (' + danhSach.length + ' người):\n\n';
+    danhSach.forEach(function(item, idx) {
+        noiDung += (idx + 1) + '. ' + (item.valGoc || 'N/A') + '\n';
+    });
+
+    thongBaoDep('info', noiDung);
 }
 
 </script>

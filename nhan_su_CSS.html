@@ -51,6 +51,10 @@
     width: 100%; 
     border-collapse: collapse; 
     white-space: nowrap; 
+    /* Tắt tính năng Safari iOS tự động phóng to chữ ở các cột có nội dung dài
+       (như cột Địa chỉ) trong bảng cuộn ngang, khiến cỡ chữ không đồng đều giữa các cột */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   
   .ns-table th, .ns-table td { 
@@ -58,6 +62,8 @@
     text-align: left; 
     border-bottom: 1px solid #eee; 
     min-width: 120px; 
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   
   .ns-table th { 
@@ -155,6 +161,44 @@
     font-weight: bold; 
     font-size: 15px;
     cursor: pointer; 
+  }
+
+  /* ===== Tab Thống kê ===== */
+  .ns-stat-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .ns-stat-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px 10px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    border: 1px solid #e8f5e9;
+  }
+  .ns-stat-icon { font-size: 22px; margin-bottom: 4px; }
+  .ns-stat-value { font-size: 22px; font-weight: bold; color: #2e7d32; line-height: 1.2; }
+  .ns-stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+
+  .ns-chart-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    border: 1px solid #eee;
+  }
+  .ns-chart-title { font-size: 15px; font-weight: bold; color: #2c3e50; margin-bottom: 12px; }
+  .ns-chart-wrap { position: relative; height: 260px; max-width: 360px; margin: 0 auto; }
+  .ns-empty { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
+
+  @media (max-width: 480px) {
+    .ns-stat-cards { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .ns-stat-value { font-size: 18px; }
+    .ns-stat-icon { font-size: 18px; }
+    .ns-chart-wrap { height: 220px; }
   }
 
   .ns-nav-bar {

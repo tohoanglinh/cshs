@@ -6,6 +6,7 @@
   </head>
   <body>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 
 <div class="ns-container">
   <div class="ns-header">
@@ -80,8 +81,36 @@
   </div>
 
   <!-- TAB 3: THỐNG KÊ -->
-  <div id="tabThongKe" style="display: none; text-align: center; padding: 40px 20px;">
-    <h3 style="color: #666; font-weight: normal;">🚧 Tính năng Thống kê đang phát triển...</h3>
+  <div id="tabThongKe" style="display: none;">
+    <div class="ns-stat-cards">
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon">👥</div>
+        <div class="ns-stat-value" id="tkTongSoNhanSu">--</div>
+        <div class="ns-stat-label">Tổng số nhân sự</div>
+      </div>
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon">🎂</div>
+        <div class="ns-stat-value" id="tkTuoiTrungBinh">--</div>
+        <div class="ns-stat-label">Tuổi trung bình</div>
+      </div>
+      <div class="ns-stat-card">
+        <div class="ns-stat-icon">📆</div>
+        <div class="ns-stat-value" id="tkThamNienTrungBinh">--</div>
+        <div class="ns-stat-label">Thâm niên TB (năm)</div>
+      </div>
+    </div>
+
+    <div class="ns-chart-card">
+      <div class="ns-chart-title">🎓 Trình độ chuyên môn</div>
+      <div class="ns-chart-wrap"><canvas id="chartTrinhDo"></canvas></div>
+      <div class="ns-empty" id="chartTrinhDoEmpty" style="display:none;">Chưa có dữ liệu Trình độ.</div>
+    </div>
+
+    <div class="ns-chart-card">
+      <div class="ns-chart-title">📊 Thâm niên công tác</div>
+      <div class="ns-chart-wrap"><canvas id="chartThamNien"></canvas></div>
+      <div class="ns-empty" id="chartThamNienEmpty" style="display:none;">Chưa có dữ liệu Thâm niên.</div>
+    </div>
   </div>
   </div>
 
