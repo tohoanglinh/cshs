@@ -805,6 +805,46 @@ function layNgayDangYYYYMMDD(giaTri, ss) {
   return giaTri.toString().trim();
 }
 
+// 2b. Lấy toàn bộ danh sách người đã được xếp trông trưa của 1 THÁNG, gom nhóm
+//     theo từng Ngày. CHỈ trả về những ngày đã có người (bỏ qua ngày trống).
+function layTrongTruaTheoThang(thangStr, maNamHoc) {
+  try {
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName("TrongTrua");
+    if (!sheet || sheet.getLastRow() < 2) return [];
+
+    var parts = thangStr.split("-"); // "yyyy-MM"
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+    var mapNgay = {}; // "yyyy-MM-dd" -> [{hoTen, boPhan, lop}]
+
+    data.forEach(function(row) {
+      var ngayFmt = layNgayDangYYYYMMDD(row[1], ss); // "yyyy-MM-dd"
+      var p = ngayFmt.split("-");
+      if (p.length !== 3) return;
+      if (parseInt(p[0], 10) !== nam || parseInt(p[1], 10) !== thang) return;
+      if (!row[2]) return;
+
+      if (!mapNgay[ngayFmt]) mapNgay[ngayFmt] = [];
+      mapNgay[ngayFmt].push({ hoTen: row[2], boPhan: row[3] || "", lop: row[4] || "" });
+    });
+
+    // Sắp xếp theo ngày tăng dần, mỗi phần tử = 1 ngày có người trông
+    return Object.keys(mapNgay).sort().map(function(ngay) {
+      var p = ngay.split("-");
+      return {
+        ngay: ngay,                                    // "yyyy-MM-dd" (dùng để đối chiếu/gán vào input date)
+        ngayHienThi: p[2] + "/" + p[1] + "/" + p[0],    // "dd/MM/yyyy" (hiển thị)
+        danhSach: mapNgay[ngay]
+      };
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
 // 3. Lưu (ghi đè) toàn bộ danh sách người trông trưa của 1 NGÀY cụ thể.
 //    Xóa hết các dòng cũ thuộc đúng ngày đó rồi ghi lại từ danh sách mới nhất
 //    do client gửi lên, để tránh trùng lặp khi người dùng sửa đi sửa lại.

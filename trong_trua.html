@@ -13,17 +13,17 @@
 
       <div class="tt-form-row">
         <div class="tt-form-group">
-          <label>Tháng làm việc (dùng để xuất Excel)</label>
+          <label>Tháng làm việc</label>
           <input type="month" id="ttThang" onchange="doiThangTrongTrua()">
         </div>
         <div class="tt-form-group">
           <label>Ngày nhập dữ liệu</label>
-          <input type="date" id="ttNgay" onchange="doiNgayTrongTrua()">
+          <input type="date" id="ttNgay" onchange="chuyenNgayTrongTruaCoXacNhan(this.value)">
         </div>
       </div>
 
       <div class="tt-add-card">
-        <div class="tt-section-title">➕ Thêm người trông trưa cho ngày này</div>
+        <div class="tt-section-title">➕ Thêm người trông trưa cho ngày <span id="ttNgayHienThi"></span></div>
         <div class="tt-form-row">
           <div class="tt-form-group" style="flex: 1.6;">
             <label>Họ và tên</label>
@@ -41,11 +41,15 @@
           </div>
         </div>
         <button type="button" class="tt-btn-add" onclick="themNguoiTrongTrua()">➕ Thêm vào danh sách</button>
+
+        <div id="ttDanhSachNgay" class="tt-pending-list">
+          <div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>
+        </div>
       </div>
 
-      <div class="tt-section-title">📋 Danh sách ngày <span id="ttNgayHienThi"></span></div>
-      <div id="ttDanhSachNgay">
-        <div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>
+      <div class="tt-section-title">📅 Danh sách trông trưa tháng <span id="ttThangHienThi"></span></div>
+      <div id="ttDanhSachThang">
+        <div class="tt-empty">Đang tải dữ liệu...</div>
       </div>
 
       <div class="tt-action-bar">
