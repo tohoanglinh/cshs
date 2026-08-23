@@ -347,12 +347,13 @@
     var item = ttDanhSachNgayHienTai[idx];
     if (!item) return;
 
-    var tenHienThi = item.hoTen + (item.lop ? ' (lớp ' + item.lop + ')' : '');
+    var tenHienThi = item.hoTen;
+    var lopHienThi = item.lop ? ' lớp ' + item.lop : '';
     var ngayHienThi = formatNgayHienThiTT(ttNgayDangXem || document.getElementById('ttNgay').value);
 
     Swal.fire({
       title: 'Xóa người trông trưa?',
-      text: 'Cô có chắc muốn xóa ' + tenHienThi + ' khỏi danh sách trông trưa ngày ' + ngayHienThi + ' không?',
+      text: 'Cô có chắc muốn xóa ' + tenHienThi + ' khỏi danh sách trông trưa ' + lopHienThi + ' vào ngày ' + ngayHienThi + ' không?',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
