@@ -27,6 +27,17 @@
   }
   .tt-form-group input:focus { border-color: #ff9800; background-color: #fff; }
 
+  /* Fix lỗi iOS Safari: ô Tháng làm việc / Ngày nhập dữ liệu tự phình to, tràn khỏi khung khi đứng cạnh nhau */
+  .tt-form-group {
+    min-width: 0; /* cho phép flex item co nhỏ đúng theo cột, không bị input date/month ép rộng ra */
+  }
+  .tt-form-group input[type="date"],
+  .tt-form-group input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
   .tt-add-card {
     background: #fff8ee;
     border: 1px solid #ffe0b2;

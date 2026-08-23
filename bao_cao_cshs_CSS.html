@@ -9,6 +9,14 @@
     input[type="date"], select, textarea { width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; background-color: #f9f9f9; outline: none; }
     textarea { height: 60px; resize: none; margin-top: 6px; }
 
+    /* Fix lỗi iOS Safari: input date tự phình to, tràn ra ngoài khung, không align với các ô khác */
+    input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+
     .section-title { font-size: 15px; font-weight: bold; margin-top: 16px; margin-bottom: 8px; color: #111; }
     .chips-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; min-height: 20px; }
     .chip { padding: 6px 12px; background-color: #f0f0f0; border-radius: 20px; font-size: 13px; cursor: pointer; border: 1px solid transparent; color: #444; }

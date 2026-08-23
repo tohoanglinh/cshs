@@ -1004,10 +1004,45 @@ function xuatFileTrongTruaChuan(thangStr, maNamHoc) {
 
   SpreadsheetApp.flush();
 
-  // 8. Tạo URL Export (xlsx)
-  var ssId = ss.getId();
-  var sheetId = tempSheet.getSheetId();
-  var exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=xlsx&gid=" + sheetId;
+  // 8. Gom các Sheet vào một File tạm thời để xuất Excel chứa nhiều Sheet
+  var FILE_NGUON_ID = "1Vlm0tRvP1jEXaXcSvYN9bjTKHDuAcCwfoeEZX41wMA0"; // <-- Thay ID file nguồn vào đây
+  var TEN_SHEET_1 = "PCN_lop1";                   // <-- Thay tên Sheet 1 cần chép
+  var TEN_SHEET_2 = "PCN_1co2lop";                   // <-- Thay tên Sheet 2 cần chép
+
+  // Tạo file Google Sheet tạm để chứa các sheet xuất
+  var tempExportSS = SpreadsheetApp.create(baseFileName);
+  var defaultSheet = tempExportSS.getSheets()[0]; // Sheet mặc định ban đầu
+
+  // a. Copy Sheet Trông trưa sang file tạm
+  var copiedSheetMain = tempSheet.copyTo(tempExportSS);
+  copiedSheetMain.setName("Bảng chấm công"); // Đặt tên hiển thị trong Excel
+
+  // b. Copy 2 Sheet từ file bên ngoài sang
+  try {
+    var sourceSS = SpreadsheetApp.openById(FILE_NGUON_ID);
+    var sheet1 = sourceSS.getSheetByName(TEN_SHEET_1);
+    var sheet2 = sourceSS.getSheetByName(TEN_SHEET_2);
+
+    if (sheet1) {
+      var c1 = sheet1.copyTo(tempExportSS);
+      c1.setName(sheet1.getName());
+    }
+    if (sheet2) {
+      var c2 = sheet2.copyTo(tempExportSS);
+      c2.setName(sheet2.getName());
+    }
+  } catch (e) {
+    Logger.log("Lỗi khi mở/copy file nguồn: " + e.toString());
+  }
+
+  // c. Xóa sheet trống mặc định lúc tạo file
+  tempExportSS.deleteSheet(defaultSheet);
+
+  // d. Tạo link xuất toàn bộ File (không dùng &gid để xuất đủ cả 3 sheets)
+  var exportUrl = "https://docs.google.com/spreadsheets/d/" + tempExportSS.getId() + "/export?format=xlsx";
+
+  // e. Đưa file tạm vào Thùng rác Drive để tránh rác dung lượng (link tải vẫn hoạt động)
+  DriveApp.getFileById(tempExportSS.getId()).setTrashed(true);
 
   return {
     success: true,

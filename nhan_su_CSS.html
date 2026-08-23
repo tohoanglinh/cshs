@@ -107,6 +107,21 @@
     box-sizing: border-box; 
   }
 
+  /* Fix lỗi iOS Safari: ô Ngày sinh (input date) tự phình to, tràn ra ngoài khung lưới */
+  .ns-form-group input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  #dynamicInputsContainer {
+    /* Cho phép các ô trong lưới co nhỏ đúng theo cột, không bị input date ép rộng ra */
+    min-width: 0;
+  }
+  #dynamicInputsContainer .ns-form-group {
+    min-width: 0;
+  }
+
   .ns-input-locked,
   .ns-input-locked:disabled {
     background-color: #f0f0f0;

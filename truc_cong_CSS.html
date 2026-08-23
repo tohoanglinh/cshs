@@ -54,6 +54,10 @@
   border-radius: 6px;
   font-size: 15px;
   box-sizing: border-box;
+  /* Fix lỗi iOS Safari: input date tự phình to hơn max-width đã đặt */
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
 }
 
 .tc-table-wrap {
