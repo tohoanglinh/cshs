@@ -7,6 +7,13 @@
   var ttTuNgayDangXem = '';       // "yyyy-MM-dd" - đầu khoảng ngày đang thực sự hiển thị trên màn hình
   var ttDenNgayDangXem = '';      // "yyyy-MM-dd" - cuối khoảng ngày đang thực sự hiển thị trên màn hình
   var ttDanhSachThangHienTai = []; // [{ngay, ngayHienThi, danhSach}] các ngày có người của tháng đang chọn
+  var ttThangTrangHienTai = 0;     // Trang hiện tại (0-based) khi hiển thị Danh sách trông trưa tháng theo trang
+  var TT_SO_NGAY_MOI_TRANG = 5;    // Số ngày tối đa hiển thị mỗi trang (Danh sách trông trưa tháng)
+
+  var ttSapXepCot = 'ngay';        // Cột đang sắp xếp của bảng khoảng ngày: 'ngay' | 'hoTen' | 'boPhan' | 'lop'
+  var ttSapXepChieu = 1;           // 1 = tăng dần, -1 = giảm dần
+  var ttTrangKhoangHienTai = 0;    // Trang hiện tại (0-based) của bảng danh sách khoảng ngày đang nhập
+  var TT_SO_DONG_MOI_TRANG = 10;   // Số dòng tối đa hiển thị mỗi trang (bảng danh sách khoảng ngày)
 
   // 1. Hàm hỗ trợ định dạng ngày YYYY-MM-DD / YYYY-MM
   function ttFormatDate(date) {
@@ -209,6 +216,8 @@
         ttDanhSachNgayGoc = JSON.parse(JSON.stringify(ttDanhSachNgayHienTai)); // lưu bản gốc để so sánh sau này
         ttTuNgayDangXem = tuNgay;
         ttDenNgayDangXem = denNgay;
+        ttTrangKhoangHienTai = 0;
+        ttXoaTrangBoLocKhoang();
         renderDanhSachKhoangTT();
         renderDanhSachThangTT(); // cập nhật lại highlight khoảng ngày đang chọn trong danh sách tháng
       })
@@ -217,6 +226,8 @@
         ttDanhSachNgayGoc = [];
         ttTuNgayDangXem = tuNgay;
         ttDenNgayDangXem = denNgay;
+        ttTrangKhoangHienTai = 0;
+        ttXoaTrangBoLocKhoang();
         renderDanhSachKhoangTT();
         renderDanhSachThangTT();
       })
@@ -308,16 +319,19 @@
     google.script.run
       .withSuccessHandler(function(res) {
         ttDanhSachThangHienTai = res || [];
+        ttThangTrangHienTai = 0;
         renderDanhSachThangTT();
       })
       .withFailureHandler(function(err) {
         ttDanhSachThangHienTai = [];
+        ttThangTrangHienTai = 0;
         renderDanhSachThangTT();
       })
       .layTrongTruaTheoThang(thangVal, maNamHoc);
   }
 
   // 8c. Vẽ lại Danh sách trông trưa cả tháng - mỗi ngày là 1 thẻ, bấm vào để sửa/thêm ngày đó
+  //     Chỉ hiển thị tối đa TT_SO_NGAY_MOI_TRANG ngày/trang, có nút chuyển trang (‹ Trước / Sau ›) nếu nhiều hơn.
   function renderDanhSachThangTT() {
     var box = document.getElementById('ttDanhSachThang');
     if (!box) return;
@@ -327,8 +341,15 @@
       return;
     }
 
+    var tongSoTrang = Math.ceil(ttDanhSachThangHienTai.length / TT_SO_NGAY_MOI_TRANG);
+    if (ttThangTrangHienTai > tongSoTrang - 1) ttThangTrangHienTai = tongSoTrang - 1;
+    if (ttThangTrangHienTai < 0) ttThangTrangHienTai = 0;
+
+    var batDau = ttThangTrangHienTai * TT_SO_NGAY_MOI_TRANG;
+    var dsTrangHienTai = ttDanhSachThangHienTai.slice(batDau, batDau + TT_SO_NGAY_MOI_TRANG);
+
     var html = '';
-    ttDanhSachThangHienTai.forEach(function(ngayObj) {
+    dsTrangHienTai.forEach(function(ngayObj) {
       var dangChon = !!(ttTuNgayDangXem && ttDenNgayDangXem &&
         ngayObj.ngay >= ttTuNgayDangXem && ngayObj.ngay <= ttDenNgayDangXem);
       var tenNguoi = ngayObj.danhSach.map(function(p) {
@@ -342,7 +363,23 @@
         '</div>';
     });
 
+    if (tongSoTrang > 1) {
+      html += '<div class="tt-month-pagination">' +
+        '<button type="button" class="tt-page-btn"' + (ttThangTrangHienTai === 0 ? ' disabled' : '') +
+          ' onclick="doiTrangThangTT(-1)">‹ Trước</button>' +
+        '<span class="tt-page-info">Trang ' + (ttThangTrangHienTai + 1) + '/' + tongSoTrang + '</span>' +
+        '<button type="button" class="tt-page-btn"' + (ttThangTrangHienTai === tongSoTrang - 1 ? ' disabled' : '') +
+          ' onclick="doiTrangThangTT(1)">Sau ›</button>' +
+        '</div>';
+    }
+
     box.innerHTML = html;
+  }
+
+  // 8c-2. Chuyển trang (lùi/tiến) của Danh sách trông trưa tháng
+  function doiTrangThangTT(delta) {
+    ttThangTrangHienTai += delta;
+    renderDanhSachThangTT();
   }
 
   // 8d. Bấm vào 1 ngày trong Danh sách tháng -> đưa ngày đó vào cả "Từ ngày" và "Đến ngày"
@@ -477,27 +514,83 @@
   }
 
   // 10. Vẽ lại bảng danh sách của khoảng ngày đang chọn (hiện thêm cột Ngày khi khoảng > 1 ngày)
-  function renderDanhSachKhoangTT() {
+  //     - Có thể lọc nhanh theo Họ và tên / Bộ phận / Lớp qua 3 ô lọc phía trên bảng.
+  //     - Bấm vào tiêu đề cột (Ngày / Họ và tên / Bộ phận / Lớp) để sắp xếp tăng/giảm dần.
+  //     - Chỉ hiển thị tối đa TT_SO_DONG_MOI_TRANG dòng/trang, có nút chuyển trang nếu nhiều hơn.
+  //     resetTrang: truyền true khi gọi từ việc gõ ô lọc, để tự động về trang 1.
+  function renderDanhSachKhoangTT(resetTrang) {
     var box = document.getElementById('ttDanhSachNgay');
+    var filterRow = document.getElementById('ttFilterRow');
 
     if (!ttDanhSachNgayHienTai || ttDanhSachNgayHienTai.length === 0) {
+      if (filterRow) filterRow.style.display = 'none';
       box.innerHTML = '<div class="tt-empty">Chưa có ai được xếp trông trưa trong khoảng ngày này.</div>';
       return;
     }
+    if (filterRow) filterRow.style.display = 'flex';
 
     var coNhieuNgay = document.getElementById('ttTuNgay').value !== document.getElementById('ttDenNgay').value;
 
-    // Sắp xếp hiển thị theo Ngày rồi theo Họ và tên, nhưng vẫn xóa đúng theo chỉ số gốc
-    var dsHienThi = ttDanhSachNgayHienTai
+    // Nếu khoảng chỉ có 1 ngày mà đang lỡ chọn sắp xếp theo cột "Ngày" (cột không hiển thị) -> về lại "Họ và tên"
+    if (!coNhieuNgay && ttSapXepCot === 'ngay') ttSapXepCot = 'hoTen';
+
+    if (resetTrang) ttTrangKhoangHienTai = 0;
+
+    // Đọc giá trị 3 ô lọc nhanh (không phân biệt hoa/thường)
+    var elLocHoTen = document.getElementById('ttLocHoTen');
+    var elLocBoPhan = document.getElementById('ttLocBoPhan');
+    var elLocLop = document.getElementById('ttLocLop');
+    var locHoTen = elLocHoTen ? elLocHoTen.value.trim().toLowerCase() : '';
+    var locBoPhan = elLocBoPhan ? elLocBoPhan.value.trim().toLowerCase() : '';
+    var locLop = elLocLop ? elLocLop.value.trim().toLowerCase() : '';
+
+    // Gắn kèm chỉ số gốc (idxGoc) để nút "Xóa" luôn xóa đúng phần tử trong mảng gốc dù đã lọc/sắp xếp/phân trang
+    var dsCoIdx = ttDanhSachNgayHienTai
       .map(function(item, idxGoc) { return { item: item, idxGoc: idxGoc }; })
-      .sort(function(a, b) {
-        if (a.item.ngay !== b.item.ngay) return a.item.ngay < b.item.ngay ? -1 : 1;
-        return (a.item.hoTen || '').localeCompare(b.item.hoTen || '');
+      .filter(function(o) {
+        if (locHoTen && (o.item.hoTen || '').toLowerCase().indexOf(locHoTen) === -1) return false;
+        if (locBoPhan && (o.item.boPhan || '').toLowerCase().indexOf(locBoPhan) === -1) return false;
+        if (locLop && (o.item.lop || '').toLowerCase().indexOf(locLop) === -1) return false;
+        return true;
       });
 
+    dsCoIdx.sort(function(a, b) {
+      var col = ttSapXepCot;
+      var va, vb;
+      if (col === 'ngay') { va = a.item.ngay || ''; vb = b.item.ngay || ''; }
+      else if (col === 'boPhan') { va = (a.item.boPhan || '').toLowerCase(); vb = (b.item.boPhan || '').toLowerCase(); }
+      else if (col === 'lop') { va = (a.item.lop || '').toLowerCase(); vb = (b.item.lop || '').toLowerCase(); }
+      else { va = (a.item.hoTen || '').toLowerCase(); vb = (b.item.hoTen || '').toLowerCase(); }
+
+      var cmp = va < vb ? -1 : (va > vb ? 1 : 0);
+      if (cmp === 0) {
+        // Đồng hạng -> sắp xếp phụ theo Ngày rồi Họ và tên để thứ tự luôn ổn định
+        if (a.item.ngay !== b.item.ngay) cmp = a.item.ngay < b.item.ngay ? -1 : 1;
+        else cmp = (a.item.hoTen || '').localeCompare(b.item.hoTen || '');
+      }
+      return cmp * ttSapXepChieu;
+    });
+
+    if (dsCoIdx.length === 0) {
+      box.innerHTML = '<div class="tt-empty">Không tìm thấy người phù hợp với bộ lọc đang chọn.</div>';
+      return;
+    }
+
+    var tongSoTrang = Math.ceil(dsCoIdx.length / TT_SO_DONG_MOI_TRANG);
+    if (ttTrangKhoangHienTai > tongSoTrang - 1) ttTrangKhoangHienTai = tongSoTrang - 1;
+    if (ttTrangKhoangHienTai < 0) ttTrangKhoangHienTai = 0;
+
+    var batDau = ttTrangKhoangHienTai * TT_SO_DONG_MOI_TRANG;
+    var dsHienThi = dsCoIdx.slice(batDau, batDau + TT_SO_DONG_MOI_TRANG);
+
+    function tieuDeCot(nhan, ten) {
+      var mui = ttSapXepCot === ten ? (ttSapXepChieu === 1 ? ' ▲' : ' ▼') : '';
+      return '<th class="tt-th-sortable" onclick="ttDoiSapXepKhoang(\'' + ten + '\')">' + nhan + mui + '</th>';
+    }
+
     var html = '<div class="tt-table-wrap"><table class="tt-table"><thead><tr>' +
-      (coNhieuNgay ? '<th>Ngày</th>' : '') +
-      '<th>Họ và tên</th><th>Bộ phận</th><th>Lớp</th><th></th>' +
+      (coNhieuNgay ? tieuDeCot('Ngày', 'ngay') : '') +
+      tieuDeCot('Họ và tên', 'hoTen') + tieuDeCot('Bộ phận', 'boPhan') + tieuDeCot('Lớp', 'lop') + '<th></th>' +
       '</tr></thead><tbody>';
 
     dsHienThi.forEach(function(o) {
@@ -513,7 +606,46 @@
     });
 
     html += '</tbody></table></div>';
+
+    if (tongSoTrang > 1) {
+      html += '<div class="tt-list-pagination">' +
+        '<button type="button" class="tt-page-btn"' + (ttTrangKhoangHienTai === 0 ? ' disabled' : '') +
+          ' onclick="doiTrangKhoangTT(-1)">‹ Trước</button>' +
+        '<span class="tt-page-info">Trang ' + (ttTrangKhoangHienTai + 1) + '/' + tongSoTrang + ' (' + dsCoIdx.length + ' dòng)</span>' +
+        '<button type="button" class="tt-page-btn"' + (ttTrangKhoangHienTai === tongSoTrang - 1 ? ' disabled' : '') +
+          ' onclick="doiTrangKhoangTT(1)">Sau ›</button>' +
+        '</div>';
+    }
+
     box.innerHTML = html;
+  }
+
+  // 10b. Bấm vào tiêu đề cột -> đổi cột sắp xếp (hoặc đảo chiều nếu bấm lại đúng cột đang sắp xếp)
+  function ttDoiSapXepKhoang(cot) {
+    if (ttSapXepCot === cot) {
+      ttSapXepChieu = -ttSapXepChieu;
+    } else {
+      ttSapXepCot = cot;
+      ttSapXepChieu = 1;
+    }
+    ttTrangKhoangHienTai = 0; // về trang đầu mỗi khi đổi cách sắp xếp
+    renderDanhSachKhoangTT();
+  }
+
+  // 10c. Chuyển trang (lùi/tiến) của bảng danh sách khoảng ngày đang nhập
+  function doiTrangKhoangTT(delta) {
+    ttTrangKhoangHienTai += delta;
+    renderDanhSachKhoangTT();
+  }
+
+  // 10d. Xóa trắng 3 ô lọc nhanh (gọi khi đổi khoảng ngày, tránh nhầm lẫn bộ lọc cũ với ngày mới)
+  function ttXoaTrangBoLocKhoang() {
+    var elLocHoTen = document.getElementById('ttLocHoTen');
+    var elLocBoPhan = document.getElementById('ttLocBoPhan');
+    var elLocLop = document.getElementById('ttLocLop');
+    if (elLocHoTen) elLocHoTen.value = '';
+    if (elLocBoPhan) elLocBoPhan.value = '';
+    if (elLocLop) elLocLop.value = '';
   }
 
   // 11. Xóa 1 dòng khỏi danh sách của khoảng ngày (chỉ trên giao diện, cần bấm Lưu để áp dụng)

@@ -82,6 +82,26 @@
   .tt-pending-list { margin-top: 12px; }
   .tt-pending-list .tt-empty { padding: 10px 0; }
 
+  .tt-filter-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .tt-filter-input {
+    flex: 1;
+    min-width: 100px;
+    padding: 8px 10px;
+    border: 1px solid #ffe0b2;
+    border-radius: 8px;
+    font-size: 13px;
+    background-color: #fff;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .tt-filter-input:focus { border-color: #ff9800; }
+  .tt-filter-input::placeholder { color: #bbb; }
+
   /* Danh sách trông trưa cả THÁNG - gom theo từng ngày, chỉ ngày có người */
   .tt-month-day-card {
     background: #fff;
@@ -119,12 +139,51 @@
     line-height: 1.4;
   }
 
+  .tt-month-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  .tt-page-btn {
+    padding: 7px 14px;
+    border: 1px solid #ffcc80;
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.15s ease;
+  }
+  .tt-page-btn:hover { background: #ffe0b2; }
+  .tt-page-btn:disabled {
+    background: #f5f5f5;
+    color: #bbb;
+    border-color: #eee;
+    cursor: not-allowed;
+  }
+  .tt-page-info { font-size: 13px; color: #666; font-weight: 600; }
+
+  .tt-list-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
   .tt-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 6px; }
   .tt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .tt-table th, .tt-table td {
     padding: 8px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap;
   }
   .tt-table th { background: #fafafa; color: #666; font-weight: 600; font-size: 12px; }
+  .tt-table th.tt-th-sortable { cursor: pointer; user-select: none; }
+  .tt-table th.tt-th-sortable:hover { background: #f0f0f0; color: #e65100; }
   .tt-table td.tt-col-lop { font-weight: 600; color: #e65100; }
   .tt-table td.tt-col-ngay { font-weight: 600; color: #333; white-space: nowrap; }
   .tt-table tr.tt-row-weekend td.tt-col-ngay { color: #c62828; }

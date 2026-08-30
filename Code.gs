@@ -859,16 +859,16 @@ function luuTrongTruaTheoNgay(ngayStr, maNamHoc, danhSach) {
       sheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#fff3e0");
     }
 
-    // Xóa các dòng cũ của đúng ngày này (duyệt từ dưới lên để không lệch chỉ số)
+    // Đọc toàn bộ dữ liệu hiện có 1 LẦN, giữ lại các dòng không thuộc ngày đang sửa
+    // (thay vì deleteRow() từng dòng - rất chậm vì mỗi lệnh là 1 lượt gọi API riêng).
     var lastRow = sheet.getLastRow();
+    var dataGiuLai = [];
     if (lastRow >= 2) {
-      var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
-      for (var i = data.length - 1; i >= 0; i--) {
-        var ngayFmt = layNgayDangYYYYMMDD(data[i][1], ss);
-        if (ngayFmt === ngayStr) {
-          sheet.deleteRow(i + 2);
-        }
-      }
+      var duLieuCu = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+      dataGiuLai = duLieuCu.filter(function(row) {
+        var ngayFmt = layNgayDangYYYYMMDD(row[1], ss);
+        return ngayFmt !== ngayStr;
+      });
     }
 
     // Ghi ngày dưới dạng Date (chuẩn múi giờ) để đồng bộ định dạng với các module khác
@@ -878,10 +878,21 @@ function luuTrongTruaTheoNgay(ngayStr, maNamHoc, danhSach) {
       ngayObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
     }
 
-    (danhSach || []).forEach(function(item) {
-      if (!item || !item.hoTen) return;
-      sheet.appendRow([new Date(), ngayObj, item.hoTen, item.boPhan || "", item.lop || ""]);
-    });
+    var dataMoi = (danhSach || [])
+      .filter(function(item) { return item && item.hoTen; })
+      .map(function(item) {
+        return [new Date(), ngayObj, item.hoTen, item.boPhan || "", item.lop || ""];
+      });
+
+    var tongDuLieu = dataGiuLai.concat(dataMoi);
+
+    // Ghi đè lại toàn bộ dữ liệu (trừ dòng tiêu đề) bằng 1-2 LỆNH GHI DUY NHẤT
+    if (lastRow >= 2) {
+      sheet.getRange(2, 1, lastRow - 1, 5).clearContent();
+    }
+    if (tongDuLieu.length > 0) {
+      sheet.getRange(2, 1, tongDuLieu.length, 5).setValues(tongDuLieu);
+    }
 
     return "Đã lưu danh sách trông trưa ngày " + ngayStr + " thành công!";
   } catch (err) {
@@ -938,28 +949,41 @@ function luuTrongTruaTheoKhoangNgay(tuNgayStr, denNgayStr, maNamHoc, danhSach) {
       sheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#fff3e0");
     }
 
-    // Xóa các dòng cũ có Ngày nằm trong khoảng đang sửa (duyệt từ dưới lên
-    // để không lệch chỉ số khi xóa dần)
+    // Đọc toàn bộ dữ liệu hiện có 1 LẦN DUY NHẤT, giữ lại những dòng có Ngày
+    // KHÔNG nằm trong khoảng đang sửa (thay vì deleteRow() từng dòng một - rất chậm
+    // vì mỗi deleteRow là 1 lượt gọi API riêng tới Google Sheets).
     var lastRow = sheet.getLastRow();
+    var dataGiuLai = [];
     if (lastRow >= 2) {
-      var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
-      for (var i = data.length - 1; i >= 0; i--) {
-        var ngayFmt = layNgayDangYYYYMMDD(data[i][1], ss);
-        if (ngayFmt && ngayFmt >= tuNgayStr && ngayFmt <= denNgayStr) {
-          sheet.deleteRow(i + 2);
-        }
-      }
+      var duLieuCu = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+      dataGiuLai = duLieuCu.filter(function(row) {
+        var ngayFmt = layNgayDangYYYYMMDD(row[1], ss);
+        return !(ngayFmt && ngayFmt >= tuNgayStr && ngayFmt <= denNgayStr);
+      });
     }
 
-    (danhSach || []).forEach(function(item) {
-      if (!item || !item.hoTen || !item.ngay) return;
-      var parts = item.ngay.split("-");
-      var ngayObj = item.ngay;
-      if (parts.length === 3) {
-        ngayObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      }
-      sheet.appendRow([new Date(), ngayObj, item.hoTen, item.boPhan || "", item.lop || ""]);
-    });
+    // Chuẩn bị dữ liệu mới từ danh sách client gửi lên
+    var dataMoi = (danhSach || [])
+      .filter(function(item) { return item && item.hoTen && item.ngay; })
+      .map(function(item) {
+        var parts = item.ngay.split("-");
+        var ngayObj = item.ngay;
+        if (parts.length === 3) {
+          ngayObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        }
+        return [new Date(), ngayObj, item.hoTen, item.boPhan || "", item.lop || ""];
+      });
+
+    var tongDuLieu = dataGiuLai.concat(dataMoi);
+
+    // Ghi đè lại toàn bộ dữ liệu (trừ dòng tiêu đề) bằng 1-2 LỆNH GHI DUY NHẤT
+    // thay vì appendRow() từng dòng - giúp lưu nhanh hơn rất nhiều với khoảng ngày lớn.
+    if (lastRow >= 2) {
+      sheet.getRange(2, 1, lastRow - 1, 5).clearContent();
+    }
+    if (tongDuLieu.length > 0) {
+      sheet.getRange(2, 1, tongDuLieu.length, 5).setValues(tongDuLieu);
+    }
 
     return "Đã lưu danh sách trông trưa thành công!";
   } catch (err) {
