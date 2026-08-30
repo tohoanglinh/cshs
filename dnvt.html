@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('dnvt_CSS'); ?>
+  </head>
+  <body>
+
+  <div class="dv-container">
+    <!-- TAB 1: NHẬP -->
+    <div id="dv-tab-nhap" class="dv-tab-content active">
+      <h2>📦 Đề nghị vật tư</h2>
+
+      <div class="dv-form-row">
+        <div class="dv-form-group">
+          <label>Tháng sử dụng</label>
+          <input type="month" id="dvThang" onchange="doiThangDNVT()">
+        </div>
+      </div>
+
+      <div class="dv-budget-box" id="dvBudgetBox" style="display:none;">
+        <div class="dv-budget-item">
+          <span class="dv-budget-label">Ngân sách dự trù</span>
+          <span class="dv-budget-value-wrap">
+            <span class="dv-budget-value" id="dvBudgetGiaTri" ondblclick="dvBatDauSuaBudget()">0 đ</span>
+            <input type="number" id="dvBudgetInput" class="dv-budget-input" style="display:none;" min="0" step="any"
+                   onkeydown="dvXuLyPhimBudget(event)">
+            <button type="button" class="dv-btn-icon-budget" id="dvBtnSuaBudget" onclick="dvBatDauSuaBudget()" title="Sửa ngân sách dự trù">✏️</button>
+            <button type="button" class="dv-btn-icon-budget dv-btn-icon-ok" id="dvBtnLuuBudget" style="display:none;" onclick="dvLuuBudgetMoi()" title="Lưu">✔️</button>
+            <button type="button" class="dv-btn-icon-budget dv-btn-icon-cancel" id="dvBtnHuyBudget" style="display:none;" onclick="dvHuySuaBudget()" title="Hủy">✖️</button>
+          </span>
+        </div>
+        <div class="dv-budget-item">
+          <span class="dv-budget-label">Đã chi (lũy kế đến tháng này)</span>
+          <span class="dv-budget-value dv-budget-dachi" id="dvBudgetDaChi">0 đ</span>
+        </div>
+        <div class="dv-budget-item">
+          <span class="dv-budget-label">Còn lại</span>
+          <span class="dv-budget-value dv-budget-conlai" id="dvBudgetConLai">0 đ</span>
+        </div>
+      </div>
+
+      <div class="dv-add-card">
+        <div class="dv-section-title">➕ Thêm mặt hàng vào phiếu tháng <span id="dvThangHienThi"></span></div>
+        <div class="dv-form-row">
+          <div class="dv-form-group" style="flex: 1.8;">
+            <label>Tên mặt hàng</label>
+            <input type="text" id="dvTenMH" placeholder="VD: Giấy ăn">
+          </div>
+          <div class="dv-form-group">
+            <label>ĐVT</label>
+            <input type="text" id="dvDVT" placeholder="VD: kg">
+          </div>
+        </div>
+        <div class="dv-form-row">
+          <div class="dv-form-group">
+            <label>Số lượng</label>
+            <input type="number" id="dvSoLuong" placeholder="0" min="0" step="any" oninput="tinhThanhTienDNVT()">
+          </div>
+          <div class="dv-form-group">
+            <label>Đơn giá</label>
+            <input type="number" id="dvDonGia" placeholder="0" min="0" step="any" oninput="tinhThanhTienDNVT()">
+          </div>
+          <div class="dv-form-group">
+            <label>Thành tiền (tạm tính)</label>
+            <input type="text" id="dvThanhTienTam" placeholder="0" disabled>
+          </div>
+        </div>
+        <div class="dv-form-row">
+          <div class="dv-form-group" style="flex: 1;">
+            <label>Ghi chú</label>
+            <input type="text" id="dvGhiChu" placeholder="Ghi chú thêm (không bắt buộc)...">
+          </div>
+        </div>
+        <button type="button" class="dv-btn-add" onclick="themMatHangVaoDanhSach()">➕ Thêm vào danh sách</button>
+
+        <div id="dvDanhSachCho" class="dv-pending-list">
+          <div class="dv-empty">Chưa có mặt hàng nào chờ lưu.</div>
+        </div>
+      </div>
+
+      <div class="dv-section-title">📋 Danh mục hàng đã đề nghị tháng <span id="dvThangHienThi2"></span></div>
+      <div id="dvDanhSachDaLuu">
+        <div class="dv-empty">Đang tải dữ liệu...</div>
+      </div>
+      <div class="dv-tong-box" id="dvTongBox" style="display:none;">
+        Tổng cộng: <b id="dvTongTien">0 đ</b>
+      </div>
+
+      <div class="dv-action-bar">
+        <button type="button" class="dv-btn-save" id="dvBtnLuu" onclick="luuDNVT()">💾 Lưu danh sách chờ</button>
+        <button type="button" class="dv-btn-excel" onclick="xuatDNVT('xlsx')">📥 Excel</button>
+        <button type="button" class="dv-btn-pdf" onclick="xuatDNVT('pdf')">🖨️ PDF</button>
+      </div>
+    </div>
+
+    <!-- TAB 2: TRA CỨU (chưa phát triển) -->
+    <div id="dv-tab-tracuu" class="dv-tab-content" style="text-align:center; padding: 50px 20px;">
+      <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Tra cứu đang phát triển...</h3>
+    </div>
+
+    <!-- TAB 3: THỐNG KÊ (chưa phát triển) -->
+    <div id="dv-tab-thongke" class="dv-tab-content" style="text-align:center; padding: 50px 20px;">
+      <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Thống kê đang phát triển...</h3>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div class="dv-bottom-nav">
+    <div class="dv-nav-item active" onclick="chuyenTabDNVT('nhap')">📋 Nhập</div>
+    <div class="dv-nav-item" onclick="chuyenTabDNVT('tracuu')">🕒 Tra cứu</div>
+    <div class="dv-nav-item" onclick="chuyenTabDNVT('thongke')">📊 Thống kê</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <?!= include('dnvt_JS'); ?>
+  </body>
+</html>

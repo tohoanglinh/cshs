@@ -1,0 +1,135 @@
+<style>
+  .dv-container {
+    max-width: 640px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    position: relative;
+    padding-bottom: 90px;
+    box-sizing: border-box;
+  }
+
+  .dv-tab-content { display: none; }
+  .dv-tab-content.active { display: block; }
+
+  .dv-tab-content h2 { font-size: 19px; margin-top: 0; margin-bottom: 16px; color: #1565c0; }
+
+  .dv-form-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .dv-form-group { flex: 1; min-width: 130px; margin-bottom: 0; }
+  .dv-form-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 13px; color: #555; }
+  .dv-form-group input[type="text"],
+  .dv-form-group input[type="number"],
+  .dv-form-group input[type="month"] {
+    width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 8px;
+    font-size: 14px; background-color: #f9f9f9; outline: none; box-sizing: border-box;
+  }
+  .dv-form-group input:focus { border-color: #1565c0; background-color: #fff; }
+  .dv-form-group input:disabled { color: #1565c0; font-weight: bold; background-color: #eef4fc; }
+
+  /* Fix lỗi iOS Safari: ô Tháng sử dụng tự phình to, tràn khỏi khung */
+  .dv-form-group { min-width: 0; }
+  .dv-form-group input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  .dv-budget-box {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+  }
+  .dv-budget-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .dv-budget-item + .dv-budget-item { border-top: 1px dashed #eee; }
+  .dv-budget-label { font-size: 13px; color: #666; }
+  .dv-budget-value { font-size: 14px; font-weight: 700; color: #333; }
+  .dv-budget-dachi { color: #c62828; }
+  .dv-budget-conlai { color: #2e7d32; }
+  .dv-budget-conlai.dv-budget-am { color: #c62828; }
+
+  .dv-budget-value-wrap { display: flex; align-items: center; gap: 6px; }
+  .dv-budget-input {
+    width: 130px; padding: 5px 8px; border: 1px solid #1565c0; border-radius: 6px;
+    font-size: 14px; font-weight: 700; text-align: right; outline: none; box-sizing: border-box;
+  }
+  .dv-btn-icon-budget {
+    border: none; background: transparent; cursor: pointer; font-size: 13px;
+    padding: 3px 4px; line-height: 1; border-radius: 5px; opacity: 0.7;
+  }
+  .dv-btn-icon-budget:hover { opacity: 1; background: #eef4fc; }
+  .dv-btn-icon-ok { color: #2e7d32; }
+  .dv-btn-icon-cancel { color: #c62828; }
+
+  .dv-add-card {
+    background: #eef4fc;
+    border: 1px solid #bbdefb;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 18px;
+  }
+
+  .dv-section-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #111; }
+
+  .dv-btn-add {
+    width: 100%; padding: 10px; background-color: #1565c0; color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px;
+  }
+  .dv-btn-add:active { background-color: #0d47a1; }
+
+  .dv-empty { color: #999; font-size: 13px; text-align: center; padding: 16px 0; }
+
+  .dv-pending-list { margin-top: 12px; }
+  .dv-pending-list .dv-empty { padding: 10px 0; }
+
+  .dv-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 6px; }
+  .dv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .dv-table th, .dv-table td {
+    padding: 8px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap;
+  }
+  .dv-table th { background: #fafafa; color: #666; font-weight: 600; font-size: 12px; }
+  .dv-table td:last-child, .dv-table th:last-child { white-space: nowrap; }
+
+  .dv-btn-remove {
+    background: #fde8e8; color: #e53935; border: none; border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+
+  .dv-tong-box {
+    text-align: right;
+    font-size: 15px;
+    color: #333;
+    padding: 10px 4px;
+    border-top: 1px dashed #ddd;
+    margin-top: 4px;
+  }
+  .dv-tong-box b { color: #1565c0; font-size: 17px; }
+
+  .dv-action-bar { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .dv-btn-save, .dv-btn-excel, .dv-btn-pdf {
+    flex: 1; min-width: 110px; padding: 13px; border: none; border-radius: 8px; font-size: 14px;
+    font-weight: bold; cursor: pointer;
+  }
+  .dv-btn-save { background-color: #1565c0; color: #fff; }
+  .dv-btn-excel { background-color: #e8e8e8; color: #333; }
+  .dv-btn-pdf { background-color: #fde8e8; color: #c62828; }
+
+  .dv-bottom-nav {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: #ffffff; display: flex; padding: 6px; border-radius: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15); border: 1px solid #eaeaea; gap: 4px; z-index: 1000;
+  }
+  .dv-nav-item {
+    padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    color: #666; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: 0.2s;
+  }
+  .dv-nav-item.active { background-color: #e3f2fd; color: #1565c0; }
+</style>

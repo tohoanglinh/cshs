@@ -889,6 +889,84 @@ function luuTrongTruaTheoNgay(ngayStr, maNamHoc, danhSach) {
   }
 }
 
+// 3b. Lấy toàn bộ danh sách người đã được xếp trông trưa trong 1 KHOẢNG NGÀY
+//     (từ tuNgayStr đến denNgayStr, bao gồm cả 2 đầu mút). Trả về dạng PHẲNG
+//     (mỗi phần tử = 1 người trông 1 lớp vào 1 ngày cụ thể, có kèm "ngay"),
+//     dùng để nạp vào khung Thêm/Sửa khi người dùng chọn khoảng ngày.
+function layTrongTruaTheoKhoangNgay(tuNgayStr, denNgayStr, maNamHoc) {
+  try {
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName("TrongTrua");
+    if (!sheet || sheet.getLastRow() < 2) return [];
+
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+    var result = [];
+
+    data.forEach(function(row) {
+      var ngayFmt = layNgayDangYYYYMMDD(row[1], ss);
+      if (!ngayFmt) return;
+      if (ngayFmt >= tuNgayStr && ngayFmt <= denNgayStr) {
+        if (!row[2]) return;
+        result.push({ ngay: ngayFmt, hoTen: row[2], boPhan: row[3] || "", lop: row[4] || "" });
+      }
+    });
+
+    // Sắp xếp theo Ngày tăng dần, cùng ngày thì theo Họ và tên
+    result.sort(function(a, b) {
+      if (a.ngay !== b.ngay) return a.ngay < b.ngay ? -1 : 1;
+      return (a.hoTen || "").localeCompare(b.hoTen || "");
+    });
+
+    return result;
+  } catch (err) {
+    return [];
+  }
+}
+
+// 3c. Lưu (ghi đè) toàn bộ danh sách người trông trưa của 1 KHOẢNG NGÀY cụ thể.
+//     Xóa hết các dòng cũ có Ngày nằm trong khoảng [tuNgayStr, denNgayStr] rồi
+//     ghi lại từ danh sách mới nhất do client gửi lên (mỗi phần tử tự mang
+//     theo "ngay" riêng), để tránh trùng lặp khi người dùng sửa đi sửa lại.
+function luuTrongTruaTheoKhoangNgay(tuNgayStr, denNgayStr, maNamHoc, danhSach) {
+  try {
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName("TrongTrua");
+
+    if (!sheet) {
+      sheet = ss.insertSheet("TrongTrua");
+      sheet.appendRow(["Dấu thời gian", "Ngày", "Họ và tên", "Bộ phận", "Lớp"]);
+      sheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#fff3e0");
+    }
+
+    // Xóa các dòng cũ có Ngày nằm trong khoảng đang sửa (duyệt từ dưới lên
+    // để không lệch chỉ số khi xóa dần)
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      var data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+      for (var i = data.length - 1; i >= 0; i--) {
+        var ngayFmt = layNgayDangYYYYMMDD(data[i][1], ss);
+        if (ngayFmt && ngayFmt >= tuNgayStr && ngayFmt <= denNgayStr) {
+          sheet.deleteRow(i + 2);
+        }
+      }
+    }
+
+    (danhSach || []).forEach(function(item) {
+      if (!item || !item.hoTen || !item.ngay) return;
+      var parts = item.ngay.split("-");
+      var ngayObj = item.ngay;
+      if (parts.length === 3) {
+        ngayObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      }
+      sheet.appendRow([new Date(), ngayObj, item.hoTen, item.boPhan || "", item.lop || ""]);
+    });
+
+    return "Đã lưu danh sách trông trưa thành công!";
+  } catch (err) {
+    return "Lỗi: " + err.toString();
+  }
+}
+
 // 4. Xuất Excel "Bảng chấm công trông trưa" dạng ma trận (người x ngày làm việc)
 //    cho cả THÁNG được chọn, đúng theo mẫu bảng chấm công hiện có của trường.
 function xuatFileTrongTruaChuan(thangStr, maNamHoc) {
@@ -1091,4 +1169,513 @@ function xuatFileTrongTruaChuan(thangStr, maNamHoc) {
     fileName: baseFileName + '.xlsx',
     maNamHoc: maNamHoc || MA_NAM_HOC_MAC_DINH
   };
+}
+
+/* ==========================================================================
+   MODULE: ĐỀ NGHỊ VẬT TƯ (DNVT)
+   --------------------------------------------------------------------------
+   - Có 1 sheet MẪU tên "Template_DNVT" trong file năm học (giống mẫu Phiếu
+     đề nghị cung cấp hàng hóa/dịch vụ).
+   - Mỗi THÁNG chỉ có DUY NHẤT 1 phiếu: khi lưu lần đầu trong tháng, hệ thống
+     COPY sheet Template_DNVT thành 1 sheet mới tên "Tháng 9.26" (Tháng
+     <số tháng>.<2 số cuối năm>). Các lần lưu sau trong CÙNG tháng sẽ gộp
+     thêm mặt hàng vào đúng sheet đó.
+   - Các trường Người đề xuất / Trưởng phòng-bộ phận / Phòng-Bộ phận là CỐ
+     ĐỊNH (khai báo bên dưới), không cho sửa trên form. Cô muốn đổi thì sửa
+     3 hằng số DNVT_NGUOI_DE_NGHI / DNVT_TRUONG_PHONG / DNVT_PHONG_BO_PHAN.
+   - Toàn bộ vị trí ô trên phiếu (Ngày:, Người đề xuất, Trưởng phòng/bộ
+     phận, Phòng/Bộ phận, Mục đích sử dụng, Ngày sử dụng, bảng hàng hóa,
+     dòng TỔNG) đều được TÌM THEO NHÃN CHỮ trong sheet mẫu, KHÔNG hard-code
+     số dòng/cột. Vì vậy Template_DNVT bắt buộc phải còn nguyên các nhãn chữ
+     đúng như trong ảnh mẫu cô gửi (không đổi tên nhãn, có thể đổi định
+     dạng/màu sắc/độ rộng cột thoải mái).
+   ========================================================================== */
+
+var DNVT_TEN_SHEET_TEMPLATE = "Template_DNVT";
+
+// ----- 3 giá trị cố định của phiếu, sửa trực tiếp tại đây nếu cần đổi -----
+var DNVT_NGUOI_DE_NGHI = "Hoàng Thị Hà";
+var DNVT_TRUONG_PHONG  = "Nguyễn Thị Xuân Đào";
+var DNVT_PHONG_BO_PHAN = "Chăm sóc học sinh";
+
+// Định dạng 1 số thành chuỗi tiền Việt Nam đồng, vd 26250000 -> "26.250.000 đ"
+// (tự viết tay, không phụ thuộc toLocaleString('vi-VN') để chắc chắn chạy đúng
+// trên mọi runtime của Apps Script)
+function dvFormatTienVND(so) {
+  var n = Math.round(Number(so) || 0);
+  var am = n < 0;
+  var chuoi = Math.abs(n).toString();
+  var ketQua = '';
+  for (var i = 0; i < chuoi.length; i++) {
+    var viTriTuPhai = chuoi.length - i;
+    ketQua += chuoi.charAt(i);
+    if (viTriTuPhai > 1 && viTriTuPhai % 3 === 1) ketQua += '.';
+  }
+  return (am ? '-' : '') + ketQua + ' đ';
+}
+
+// Ngược lại: đọc 1 ô có thể đang là số thuần hoặc chuỗi đã format kiểu
+// "26.250.000 đ" / "-2.000 đ", trả về số nguyên để tính toán
+function dvParseTienVND(giaTri) {
+  if (typeof giaTri === 'number') return giaTri;
+  var s = (giaTri || '').toString().trim();
+  if (!s) return 0;
+  var am = s.charAt(0) === '-';
+  var chiSo = s.replace(/[^0-9]/g, '');
+  var n = parseInt(chiSo, 10);
+  if (isNaN(n)) return 0;
+  return am ? -n : n;
+}
+
+// Tên sheet của 1 tháng, ví dụ nam=2026, thang=9 -> "Tháng 9.26"
+function tenSheetThangDNVT(nam, thang) {
+  return "Tháng " + thang + "." + String(nam).slice(-2);
+}
+
+// Từ 2 số cuối năm lấy trên tên sheet (vd "26"), suy ra năm đầy đủ (vd 2026),
+// dựa vào mã năm học (vd "2627" -> năm bắt đầu 2026, năm kết thúc 2027).
+// Nhờ vậy so sánh mốc "năm*12+tháng" giữa các sheet trong CÙNG 1 file năm học
+// luôn đúng thứ tự thời gian thực tế, kể cả khi năm học vắt qua 2 năm dương lịch.
+function namDayDuDNVT(maNamHoc, haiSoCuoiNam) {
+  var ma = (maNamHoc || MA_NAM_HOC_MAC_DINH).toString().trim();
+  var namBatDau = 2000 + parseInt(ma.substring(0, 2), 10);
+  var namKetThuc = 2000 + parseInt(ma.substring(2, 4), 10);
+  var target = String(haiSoCuoiNam);
+  if (String(namBatDau).slice(-2) === target) return namBatDau;
+  if (String(namKetThuc).slice(-2) === target) return namKetThuc;
+  return 2000 + parseInt(target, 10); // dự phòng, không nên xảy ra
+}
+
+// Tìm ô đầu tiên chứa/bắt đầu bằng "chuoiTim" trong 1 vùng hàng của sheet
+// kieuKhop: 'batdau' (mặc định, an toàn hơn vì tránh trùng nhãn con) hoặc 'chua'
+function timOTrongVungTheoNhan(sheet, chuoiTim, hangBatDau, hangKetThuc, kieuKhop) {
+  var lastCol = sheet.getLastColumn();
+  var soHang = hangKetThuc - hangBatDau + 1;
+  if (lastCol < 1 || soHang < 1) return null;
+
+  var values = sheet.getRange(hangBatDau, 1, soHang, lastCol).getValues();
+  var target = boDauTiengVietGS(chuoiTim).trim();
+
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      var cell = boDauTiengVietGS(values[r][c]).trim();
+      if (!cell) continue;
+      var match = (kieuKhop === 'chua') ? (cell.indexOf(target) !== -1) : (cell.indexOf(target) === 0);
+      if (match) return { row: hangBatDau + r, col: c + 1 };
+    }
+  }
+  return null;
+}
+
+function timOTheoNhan(sheet, chuoiTim, kieuKhop) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 1) return null;
+  return timOTrongVungTheoNhan(sheet, chuoiTim, 1, lastRow, kieuKhop);
+}
+
+// Ô để GHI GIÁ TRỊ ngay sau 1 ô NHÃN (tự động bỏ qua vùng ô gộp của nhãn, nếu có)
+function oGiaTriKeBenNhanDNVT(sheet, hang, cotNhan) {
+  var oNhan = sheet.getRange(hang, cotNhan);
+  var merged = oNhan.getMergedRanges();
+  var cotBatDau = (merged && merged.length > 0) ? merged[0].getLastColumn() : cotNhan;
+  return sheet.getRange(hang, cotBatDau + 1);
+}
+
+// Điền các trường cố định của phiếu ngay khi tạo sheet mới cho 1 tháng
+function dienThongTinCoDinhDNVT(sheet, nam, thang) {
+  var vt;
+
+  vt = timOTheoNhan(sheet, "Ngày đề nghị:", 'batdau');
+  if (vt) oGiaTriKeBenNhanDNVT(sheet, vt.row, vt.col)
+    .setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy"));
+
+  vt = timOTheoNhan(sheet, "Người đề xuất", 'batdau');
+  if (vt) oGiaTriKeBenNhanDNVT(sheet, vt.row, vt.col).setValue(DNVT_NGUOI_DE_NGHI);
+
+  vt = timOTheoNhan(sheet, "Trưởng phòng", 'batdau');
+  if (vt) oGiaTriKeBenNhanDNVT(sheet, vt.row, vt.col).setValue(DNVT_TRUONG_PHONG);
+
+  // "batdau": tránh trùng với nhãn "Trưởng phòng/bộ phận" ở dòng trên
+  vt = timOTheoNhan(sheet, "Phòng/Bộ phận", 'batdau');
+  if (vt) oGiaTriKeBenNhanDNVT(sheet, vt.row, vt.col).setValue(DNVT_PHONG_BO_PHAN);
+
+  vt = timOTheoNhan(sheet, "Ngày sử dụng", 'batdau');
+  if (vt) {
+    var thangPad = (thang < 10 ? "0" : "") + thang;
+    oGiaTriKeBenNhanDNVT(sheet, vt.row, vt.col).setValue("Tháng " + thangPad + "/" + nam);
+  }
+}
+
+// Lấy sheet của đúng tháng; nếu chưa có thì copy từ Template_DNVT và điền sẵn
+// các trường cố định
+function layHoacTaoSheetDNVT(maNamHoc, nam, thang) {
+  var ss = moFileNamHoc(maNamHoc);
+  var tenSheetThang = tenSheetThangDNVT(nam, thang);
+  var sheet = ss.getSheetByName(tenSheetThang);
+
+  if (!sheet) {
+    var template = ss.getSheetByName(DNVT_TEN_SHEET_TEMPLATE);
+    if (!template) {
+      throw new Error("Không tìm thấy sheet mẫu '" + DNVT_TEN_SHEET_TEMPLATE + "' trong file năm học. Vui lòng tạo sheet mẫu này trước.");
+    }
+    sheet = template.copyTo(ss);
+    sheet.setName(tenSheetThang);
+
+    // Đưa sheet mới ra ngay sau Template để danh sách tab gọn gàng
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(template.getIndex() + 1);
+
+    dienThongTinCoDinhDNVT(sheet, nam, thang);
+  }
+  return sheet;
+}
+
+// Xác định cấu trúc bảng "Danh mục hàng yêu cầu" trong 1 sheet tháng
+// (dòng tiêu đề, dòng TỔNG, các cột TT/Tên mặt hàng/ĐVT/SL/Đơn giá/Thành tiền/Ghi chú)
+function layCauTrucBangDNVT(sheet) {
+  var viTriHeader = timOTheoNhan(sheet, "TÊN MẶT HÀNG", 'chua');
+  if (!viTriHeader) {
+    throw new Error("Không tìm thấy tiêu đề cột 'TÊN MẶT HÀNG' trong sheet '" + sheet.getName() + "'. Kiểm tra lại cấu trúc Template_DNVT.");
+  }
+
+  var hangHeader = viTriHeader.row;
+  var colTenMH = viTriHeader.col;
+  var ct = {
+    hangHeader: hangHeader,
+    colTT: colTenMH - 1,
+    colTenMH: colTenMH,
+    colDVT: colTenMH + 1,
+    colSL: colTenMH + 2,
+    colDonGia: colTenMH + 3,
+    colThanhTien: colTenMH + 4,
+    colGhiChu: colTenMH + 5
+  };
+
+  // Đảm bảo sheet đủ cột tới cột Ghi chú (phòng khi mẫu chưa mở rộng đủ)
+  if (sheet.getMaxColumns() < ct.colGhiChu) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), ct.colGhiChu - sheet.getMaxColumns());
+  }
+
+  var lastRow = sheet.getLastRow();
+  var viTriTong = timOTrongVungTheoNhan(sheet, "TỔNG", hangHeader + 1, lastRow, 'batdau');
+  if (!viTriTong) {
+    throw new Error("Không tìm thấy dòng 'TỔNG' phía dưới bảng hàng hóa trong sheet '" + sheet.getName() + "'. Kiểm tra lại cấu trúc Template_DNVT.");
+  }
+  ct.hangTong = viTriTong.row;
+
+  return ct;
+}
+
+// Tính tổng số tiền đã chi LŨY KẾ từ đầu file năm học cho tới hết tháng đang xem
+// (bao gồm cả tháng đang xem), bằng cách cộng dòng TỔNG của mọi sheet tháng có
+// mốc thời gian (năm*12+tháng) <= mốc thời gian tháng đang xem, trong CÙNG 1 file.
+function tinhSoTienDaChiDNVT(maNamHoc, namChon, thangChon) {
+  var ss = moFileNamHoc(maNamHoc);
+  var sheets = ss.getSheets();
+  var mocChon = namChon * 12 + thangChon;
+  var re = /^Tháng\s+(\d{1,2})\.(\d{2})$/;
+  var tong = 0;
+
+  sheets.forEach(function(sh) {
+    var m = re.exec(sh.getName());
+    if (!m) return; // bỏ qua Template_DNVT và các sheet khác không đúng định dạng "Tháng X.YY"
+
+    var thangSheet = parseInt(m[1], 10);
+    var namSheet = namDayDuDNVT(maNamHoc, m[2]);
+    var mocSheet = namSheet * 12 + thangSheet;
+    if (mocSheet > mocChon) return; // chỉ tính các tháng <= tháng đang xem
+
+    try {
+      var ct = layCauTrucBangDNVT(sh);
+      var giaTri = sh.getRange(ct.hangTong, ct.colThanhTien).getValue();
+      tong += Number(giaTri) || 0;
+    } catch (e) {
+      // sheet lỗi cấu trúc (thiếu nhãn...) thì bỏ qua, không làm hỏng cả phép tính
+    }
+  });
+
+  return tong;
+}
+
+// Lấy (và ghi luôn vào sheet, nếu sheet tháng đã tồn tại) 3 giá trị ngân sách:
+// - budget: Chi phí ngân sách dự kiến (cố định, đọc từ sheet tháng nếu có, hoặc
+//   từ Template_DNVT nếu tháng đó chưa tạo phiếu)
+// - daChi: tổng đã chi lũy kế tính tới hết tháng đang xem (đã bao gồm tháng này)
+// - conLai: budget - daChi
+// Ghi giá trị Ngân sách dự trù (budget) MỚI cho CẢ NĂM HỌC. Lưu duy nhất 1 nơi
+// (sheet mẫu Template_DNVT) làm nguồn chân lý (Single Source of Truth) - mỗi
+// khi 1 tháng bất kỳ được xem/lưu, giá trị này sẽ tự đồng bộ xuống sheet tháng đó.
+function luuNganSachDuTruDNVT(maNamHoc, giaTriMoi) {
+  try {
+    var giaTri = Number(giaTriMoi);
+    if (isNaN(giaTri) || giaTri < 0) {
+      return { success: false, message: "Giá trị ngân sách không hợp lệ!" };
+    }
+
+    var ss = moFileNamHoc(maNamHoc);
+    var template = ss.getSheetByName(DNVT_TEN_SHEET_TEMPLATE);
+    if (!template) {
+      return { success: false, message: "Không tìm thấy sheet mẫu '" + DNVT_TEN_SHEET_TEMPLATE + "'!" };
+    }
+
+    var vtBudget = timOTheoNhan(template, "Chi phí ngân sách dự kiến", 'chua');
+    if (!vtBudget) {
+      return { success: false, message: "Không tìm thấy nhãn 'Chi phí ngân sách dự kiến' trong sheet mẫu!" };
+    }
+    oGiaTriKeBenNhanDNVT(template, vtBudget.row, vtBudget.col).setValue(dvFormatTienVND(giaTri));
+
+    return { success: true, message: "Đã cập nhật ngân sách dự trù!", budget: giaTri };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
+}
+
+// Ghi chú: Ngân sách dự trù / Đã chi / Còn lại được lưu vào ô LIỀN KỀ ngay sau
+// ô nhãn tương ứng (dùng oGiaTriKeBenNhanDNVT, tự xử lý đúng ô kể cả khi nhãn
+// bị merge nhiều cột) - đúng cấu trúc bảng trong ảnh mẫu cô gửi. Giá trị được
+// ghi dưới dạng chuỗi đã format tiền Việt Nam đồng (vd "26.250.000 đ"), và khi
+// đọc lại để tính toán sẽ parse ngược lại thành số bằng dvParseTienVND.
+// Ngân sách dự trù luôn được đọc từ Template_DNVT (nguồn chân lý duy nhất, xem
+// hàm luuNganSachDuTruDNVT phía trên); mỗi lần gọi hàm này, giá trị đó cũng
+// được đồng bộ (ghi đè) xuống sheet của tháng đang xem để khi in/xuất file vẫn
+// đúng số liệu mới nhất.
+function layNganSachDNVT(maNamHoc, nam, thang) {
+  var ss = moFileNamHoc(maNamHoc);
+  var tenSheetThang = tenSheetThangDNVT(nam, thang);
+  var sheet = ss.getSheetByName(tenSheetThang);
+  var template = ss.getSheetByName(DNVT_TEN_SHEET_TEMPLATE);
+
+  var budget = 0;
+  if (template) {
+    var vtBudget = timOTheoNhan(template, "Chi phí ngân sách dự kiến", 'chua');
+    if (vtBudget) {
+      budget = dvParseTienVND(oGiaTriKeBenNhanDNVT(template, vtBudget.row, vtBudget.col).getValue());
+    }
+  }
+
+  var daChi = tinhSoTienDaChiDNVT(maNamHoc, nam, thang);
+  var conLai = budget - daChi;
+
+  // Nếu phiếu tháng này đã tồn tại thì đồng bộ cả 3 giá trị (đã format) vào sheet
+  if (sheet) {
+    var vtBudgetThang = timOTheoNhan(sheet, "Chi phí ngân sách dự kiến", 'chua');
+    if (vtBudgetThang) oGiaTriKeBenNhanDNVT(sheet, vtBudgetThang.row, vtBudgetThang.col).setValue(dvFormatTienVND(budget));
+
+    var vtDaChi = timOTheoNhan(sheet, "Số tiền đã chi", 'chua');
+    if (vtDaChi) oGiaTriKeBenNhanDNVT(sheet, vtDaChi.row, vtDaChi.col).setValue(dvFormatTienVND(daChi));
+
+    var vtConLai = timOTheoNhan(sheet, "Ngân sách còn lại", 'chua');
+    if (vtConLai) oGiaTriKeBenNhanDNVT(sheet, vtConLai.row, vtConLai.col).setValue(dvFormatTienVND(conLai));
+  }
+
+  return { budget: budget, daChi: daChi, conLai: conLai };
+}
+
+// Đánh lại STT liên tục cho các dòng mặt hàng đang có nội dung + cập nhật công thức TỔNG
+function capNhatSttVaTongDNVT(sheet, ct) {
+  var tt = 1;
+  for (var r = ct.hangHeader + 1; r < ct.hangTong; r++) {
+    var ten = sheet.getRange(r, ct.colTenMH).getValue();
+    if (ten && ten.toString().trim() !== "") {
+      sheet.getRange(r, ct.colTT).setValue(tt);
+      tt++;
+    } else {
+      sheet.getRange(r, ct.colTT).clearContent();
+    }
+  }
+
+  var colChuTong = sheet.getRange(1, ct.colThanhTien).getA1Notation().replace(/[0-9]/g, '');
+  if (ct.hangTong - 1 >= ct.hangHeader + 1) {
+    sheet.getRange(ct.hangTong, ct.colThanhTien)
+      .setFormula("=SUM(" + colChuTong + (ct.hangHeader + 1) + ":" + colChuTong + (ct.hangTong - 1) + ")");
+  } else {
+    sheet.getRange(ct.hangTong, ct.colThanhTien).setValue(0);
+  }
+}
+
+// Thêm danh sách mặt hàng mới vào đúng sheet tháng, tự chèn dòng nếu không đủ
+// dòng trống có sẵn giữa dòng tiêu đề và dòng TỔNG
+function themMatHangDNVT(sheet, ct, danhSachMoi) {
+  var hangTrong = [];
+  for (var r = ct.hangHeader + 1; r < ct.hangTong; r++) {
+    var giaTri = sheet.getRange(r, ct.colTenMH).getValue();
+    if (!giaTri || giaTri.toString().trim() === "") hangTrong.push(r);
+  }
+
+  var soDongTao = danhSachMoi.length - hangTrong.length;
+
+  if (soDongTao > 0) {
+    var hangMau = ct.hangTong - 1; // dòng ngay trên dòng TỔNG, để sao chép định dạng/viền
+    var soCotMau = ct.colGhiChu - ct.colTT + 1;
+
+    sheet.insertRowsBefore(ct.hangTong, soDongTao);
+
+    var rangeMau = sheet.getRange(hangMau, ct.colTT, 1, soCotMau);
+    for (var i = 0; i < soDongTao; i++) {
+      var hangMoi = ct.hangTong + i; // các dòng vừa được chèn, nằm trước dòng TỔNG (đã bị đẩy xuống)
+      rangeMau.copyTo(sheet.getRange(hangMoi, ct.colTT, 1, soCotMau));
+      hangTrong.push(hangMoi);
+    }
+    ct.hangTong += soDongTao;
+  }
+
+  hangTrong.sort(function(a, b) { return a - b; });
+
+  danhSachMoi.forEach(function(item, idx) {
+    var hang = hangTrong[idx];
+    var soLuong = Number(item.soLuong) || 0;
+    var donGia = Number(item.donGia) || 0;
+    sheet.getRange(hang, ct.colTenMH).setValue(item.tenMatHang || "");
+    sheet.getRange(hang, ct.colDVT).setValue(item.dvt || "");
+    sheet.getRange(hang, ct.colSL).setValue(soLuong);
+    sheet.getRange(hang, ct.colDonGia).setValue(donGia);
+    sheet.getRange(hang, ct.colThanhTien).setValue(soLuong * donGia);
+    sheet.getRange(hang, ct.colGhiChu).setValue(item.ghiChu || "");
+  });
+
+  capNhatSttVaTongDNVT(sheet, ct);
+}
+
+// 1. LƯU (gộp thêm) danh sách mặt hàng vào phiếu của đúng tháng
+//    data = { maNamHoc, thangSuDung: "yyyy-MM", danhSachMatHang: [{tenMatHang, dvt, soLuong, donGia, ghiChu}] }
+function luuDeNghiVatTu(data) {
+  try {
+    if (!data || !data.thangSuDung) {
+      return { success: false, message: "Vui lòng chọn Tháng sử dụng!" };
+    }
+    if (!data.danhSachMatHang || data.danhSachMatHang.length === 0) {
+      return { success: false, message: "Vui lòng thêm ít nhất 1 mặt hàng trước khi lưu!" };
+    }
+
+    var parts = data.thangSuDung.split("-"); // "yyyy-MM"
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    var sheet = layHoacTaoSheetDNVT(data.maNamHoc, nam, thang);
+    var ct = layCauTrucBangDNVT(sheet);
+    themMatHangDNVT(sheet, ct, data.danhSachMatHang);
+    var nganSach = layNganSachDNVT(data.maNamHoc, nam, thang);
+
+    return {
+      success: true,
+      message: "Đã lưu đề nghị vật tư tháng " + thang + "/" + nam + " thành công!",
+      tenSheet: sheet.getName(),
+      nganSach: nganSach
+    };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
+}
+
+// 2. Lấy danh sách mặt hàng đã lưu của 1 tháng (để hiển thị khi mở lại/chọn tháng)
+function layDeNghiVatTuTheoThang(maNamHoc, thangSuDung) {
+  try {
+    var parts = (thangSuDung || "").split("-");
+    if (parts.length !== 2) return { danhSach: [], tong: 0, daTonTai: false };
+
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName(tenSheetThangDNVT(nam, thang));
+    if (!sheet) {
+      // Chưa có phiếu tháng này -> vẫn tính/hiển thị được ngân sách (đọc budget
+      // từ Template_DNVT, đã chi tính từ các tháng trước đó đã tồn tại)
+      var nganSachChuaCoPhieu = layNganSachDNVT(maNamHoc, nam, thang);
+      return { danhSach: [], tong: 0, daTonTai: false, nganSach: nganSachChuaCoPhieu };
+    }
+
+    var ct = layCauTrucBangDNVT(sheet);
+    var danhSach = [];
+
+    for (var r = ct.hangHeader + 1; r < ct.hangTong; r++) {
+      var ten = sheet.getRange(r, ct.colTenMH).getValue();
+      if (!ten || ten.toString().trim() === "") continue;
+      danhSach.push({
+        tenMatHang: ten,
+        dvt: sheet.getRange(r, ct.colDVT).getValue(),
+        soLuong: sheet.getRange(r, ct.colSL).getValue(),
+        donGia: sheet.getRange(r, ct.colDonGia).getValue(),
+        thanhTien: sheet.getRange(r, ct.colThanhTien).getValue(),
+        ghiChu: sheet.getRange(r, ct.colGhiChu).getValue()
+      });
+    }
+
+    var tongTien = sheet.getRange(ct.hangTong, ct.colThanhTien).getValue();
+    var nganSach = layNganSachDNVT(maNamHoc, nam, thang);
+    return { danhSach: danhSach, tong: tongTien || 0, daTonTai: true, nganSach: nganSach };
+  } catch (err) {
+    return { danhSach: [], tong: 0, daTonTai: false, loi: err.toString() };
+  }
+}
+
+// 3. Xóa 1 mặt hàng đã lưu (viTriDong = chỉ số trong mảng trả về bởi layDeNghiVatTuTheoThang)
+function xoaMatHangDNVT(maNamHoc, thangSuDung, viTriDong) {
+  try {
+    var parts = (thangSuDung || "").split("-");
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName(tenSheetThangDNVT(nam, thang));
+    if (!sheet) return { success: false, message: "Chưa có phiếu đề nghị của tháng này!" };
+
+    var ct = layCauTrucBangDNVT(sheet);
+    var danhSachHang = [];
+    for (var r = ct.hangHeader + 1; r < ct.hangTong; r++) {
+      var ten = sheet.getRange(r, ct.colTenMH).getValue();
+      if (ten && ten.toString().trim() !== "") danhSachHang.push(r);
+    }
+
+    var hangCanXoa = danhSachHang[viTriDong];
+    if (!hangCanXoa) return { success: false, message: "Không tìm thấy mặt hàng cần xóa!" };
+
+    // Xóa HẲN dòng trên sheet (thay vì chỉ xóa nội dung) để các dòng phía dưới
+    // tự động dịch lên, không để lại dòng trống xen giữa bảng.
+    sheet.deleteRow(hangCanXoa);
+    ct.hangTong -= 1; // dòng TỔNG cũng dịch lên 1 theo dòng vừa xóa
+
+    capNhatSttVaTongDNVT(sheet, ct);
+    var nganSach = layNganSachDNVT(maNamHoc, nam, thang);
+
+    return { success: true, message: "Đã xóa mặt hàng khỏi phiếu!", nganSach: nganSach };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
+}
+
+// 4. Xuất Excel/PDF trực tiếp sheet của tháng đang chọn (không cần tạo sheet tạm
+//    vì bản thân sheet tháng đã là phiếu hoàn chỉnh, đúng định dạng in ấn)
+function xuatFileDNVT(thangSuDung, maNamHoc, dinhDang) {
+  try {
+    var parts = (thangSuDung || "").split("-");
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    var ss = moFileNamHoc(maNamHoc);
+    var tenSheetThang = tenSheetThangDNVT(nam, thang);
+    var sheet = ss.getSheetByName(tenSheetThang);
+    if (!sheet) {
+      return { success: false, message: "Chưa có phiếu đề nghị vật tư của tháng " + thang + "/" + nam + "!" };
+    }
+
+    var ssId = ss.getId();
+    var sheetId = sheet.getSheetId();
+    var exportUrl;
+
+    if (dinhDang === 'pdf') {
+      exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=pdf&gid=" + sheetId +
+        "&size=A4&portrait=true&fitw=true&gridlines=false&printtitle=false";
+    } else {
+      exportUrl = "https://docs.google.com/spreadsheets/d/" + ssId + "/export?format=xlsx&gid=" + sheetId;
+    }
+
+    return {
+      success: true,
+      downloadUrl: exportUrl,
+      fileName: tenSheetThang + (dinhDang === 'pdf' ? '.pdf' : '.xlsx')
+    };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
 }

@@ -38,6 +38,27 @@
     min-width: 0;
   }
 
+  .tt-range-note {
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: -6px 0 14px 0;
+    display: none;
+    line-height: 1.4;
+  }
+  .tt-range-note.tt-note-warning {
+    display: block;
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+  }
+  .tt-range-note.tt-note-error {
+    display: block;
+    background: #fdecea;
+    color: #c62828;
+    border: 1px solid #f5b5b0;
+  }
+
   .tt-add-card {
     background: #fff8ee;
     border: 1px solid #ffe0b2;
@@ -53,6 +74,7 @@
     border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 4px;
   }
   .tt-btn-add:active { background-color: #f57c00; }
+  .tt-btn-add:disabled { background-color: #ffcc80; cursor: not-allowed; }
 
   .tt-empty { color: #999; font-size: 13px; text-align: center; padding: 16px 0; }
 
@@ -104,6 +126,8 @@
   }
   .tt-table th { background: #fafafa; color: #666; font-weight: 600; font-size: 12px; }
   .tt-table td.tt-col-lop { font-weight: 600; color: #e65100; }
+  .tt-table td.tt-col-ngay { font-weight: 600; color: #333; white-space: nowrap; }
+  .tt-table tr.tt-row-weekend td.tt-col-ngay { color: #c62828; }
   .tt-btn-remove {
     background: #fde8e8; color: #e53935; border: none; border-radius: 6px;
     padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 600;

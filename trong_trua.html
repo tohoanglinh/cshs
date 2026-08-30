@@ -16,14 +16,22 @@
           <label>Tháng làm việc</label>
           <input type="month" id="ttThang" onchange="doiThangTrongTrua()">
         </div>
-        <div class="tt-form-group">
-          <label>Ngày nhập dữ liệu</label>
-          <input type="date" id="ttNgay" onchange="chuyenNgayTrongTruaCoXacNhan(this.value)">
-        </div>
       </div>
 
+      <div class="tt-form-row">
+        <div class="tt-form-group">
+          <label>Từ ngày</label>
+          <input type="date" id="ttTuNgay" onchange="doiKhoangNgayTrongTruaCoXacNhan()">
+        </div>
+        <div class="tt-form-group">
+          <label>Đến ngày</label>
+          <input type="date" id="ttDenNgay" onchange="doiKhoangNgayTrongTruaCoXacNhan()">
+        </div>
+      </div>
+      <div id="ttGhiChuKhoangNgay" class="tt-range-note"></div>
+
       <div class="tt-add-card">
-        <div class="tt-section-title">➕ Thêm người trông trưa cho ngày <span id="ttNgayHienThi"></span></div>
+        <div class="tt-section-title">➕ Thêm người trông trưa cho <span id="ttKhoangNgayHienThi"></span></div>
         <div class="tt-form-row">
           <div class="tt-form-group" style="flex: 1.6;">
             <label>Họ và tên</label>
@@ -40,10 +48,10 @@
             <datalist id="dsLopTT"></datalist>
           </div>
         </div>
-        <button type="button" class="tt-btn-add" onclick="themNguoiTrongTrua()">➕ Thêm vào danh sách</button>
+        <button type="button" class="tt-btn-add" id="ttBtnThem" onclick="themNguoiTrongTrua()">➕ Thêm vào danh sách</button>
 
         <div id="ttDanhSachNgay" class="tt-pending-list">
-          <div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>
+          <div class="tt-empty">Chưa có ai được xếp trông trưa trong khoảng ngày này.</div>
         </div>
       </div>
 

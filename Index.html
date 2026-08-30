@@ -51,6 +51,12 @@
         <div class="card-icon">🛌</div>
         <p class="card-title">Trông trưa</p>
       </button>
+
+      <!-- Nút 5: Đề nghị vật tư -->
+      <button class="menu-card" onclick="moChucNang('dnvtPage')">
+        <div class="card-icon">📦</div>
+        <p class="card-title">Đề nghị vật tư</p>
+      </button>
     </div>
   </div>
 
@@ -76,6 +82,12 @@
   <div id="trongTruaPage" class="screen-page" style="display: none;">
     <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChu()">⬅ Trang chủ</button>
     <?!= include('trong_trua'); ?>
+  </div>
+
+  <!-- MÀN HÌNH 6: ĐỀ NGHỊ VẬT TƯ -->
+  <div id="dnvtPage" class="screen-page" style="display: none;">
+    <button style="margin: 10px; padding: 8px 12px; border-radius: 20px;" onclick="veTrangChu()">⬅ Trang chủ</button>
+    <?!= include('dnvt'); ?>
   </div>
 
 <?!= include('Index_JS'); ?>

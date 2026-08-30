@@ -1,0 +1,417 @@
+<script>
+  // ==== Biến toàn cục module Đề nghị vật tư ====
+  var dvDanhSachCho = [];       // Mặt hàng đang chờ lưu (chưa ghi vào Sheet)
+  var dvDanhSachDaLuu = [];     // Mặt hàng đã lưu trong phiếu của tháng đang xem
+  var dvThangDangXem = '';      // "yyyy-MM"
+
+  function dvFormatThang(date) {
+    var d = new Date(date), month = '' + (d.getMonth() + 1), year = d.getFullYear();
+    if (month.length < 2) month = '0' + month;
+    return year + '-' + month;
+  }
+  function dvFormatThangHienThi(thangStr) {
+    var p = (thangStr || '').split('-');
+    if (p.length !== 2) return thangStr;
+    return p[1] + '/' + p[0];
+  }
+  function dvFormatTien(so) {
+    var n = Number(so) || 0;
+    return n.toLocaleString('vi-VN') + ' đ';
+  }
+
+  // 0. Vẽ lại khối Ngân sách dự trù / Đã chi / Còn lại
+  var dvNganSachHienTai = null; // {budget, daChi, conLai} của tháng đang xem
+
+  function renderNganSachDNVT(nganSach) {
+    var box = document.getElementById('dvBudgetBox');
+    dvNganSachHienTai = nganSach || null;
+
+    dvHuySuaBudget(); // luôn thoát chế độ sửa mỗi khi có dữ liệu mới (đổi tháng...)
+
+    if (!nganSach) {
+      box.style.display = 'none';
+      return;
+    }
+    document.getElementById('dvBudgetGiaTri').innerText = dvFormatTien(nganSach.budget);
+    document.getElementById('dvBudgetDaChi').innerText = dvFormatTien(nganSach.daChi);
+
+    var elConLai = document.getElementById('dvBudgetConLai');
+    elConLai.innerText = dvFormatTien(nganSach.conLai);
+    elConLai.classList.toggle('dv-budget-am', Number(nganSach.conLai) < 0);
+
+    box.style.display = 'block';
+  }
+
+  // 0b. Bật chế độ sửa Ngân sách dự trù (double-click vào số, hoặc bấm nút ✏️)
+  function dvBatDauSuaBudget() {
+    var elInput = document.getElementById('dvBudgetInput');
+    elInput.value = dvNganSachHienTai ? dvNganSachHienTai.budget : 0;
+
+    document.getElementById('dvBudgetGiaTri').style.display = 'none';
+    document.getElementById('dvBtnSuaBudget').style.display = 'none';
+    elInput.style.display = 'inline-block';
+    document.getElementById('dvBtnLuuBudget').style.display = 'inline-block';
+    document.getElementById('dvBtnHuyBudget').style.display = 'inline-block';
+
+    elInput.focus();
+    elInput.select();
+  }
+
+  // 0c. Thoát chế độ sửa, quay lại hiển thị readonly (không lưu)
+  function dvHuySuaBudget() {
+    document.getElementById('dvBudgetGiaTri').style.display = 'inline';
+    document.getElementById('dvBtnSuaBudget').style.display = 'inline-block';
+    document.getElementById('dvBudgetInput').style.display = 'none';
+    document.getElementById('dvBtnLuuBudget').style.display = 'none';
+    document.getElementById('dvBtnHuyBudget').style.display = 'none';
+  }
+
+  // 0d. Enter để lưu, Esc để hủy khi đang gõ trong ô sửa ngân sách
+  function dvXuLyPhimBudget(event) {
+    if (event.key === 'Enter') { event.preventDefault(); dvLuuBudgetMoi(); }
+    else if (event.key === 'Escape') { event.preventDefault(); dvHuySuaBudget(); }
+  }
+
+  // 0e. Lưu giá trị Ngân sách dự trù mới (áp dụng cho CẢ NĂM HỌC đang chọn)
+  function dvLuuBudgetMoi() {
+    var elInput = document.getElementById('dvBudgetInput');
+    var giaTriMoi = Number(elInput.value);
+
+    if (isNaN(giaTriMoi) || giaTriMoi < 0) {
+      Swal.fire({ icon: 'warning', title: 'Giá trị không hợp lệ', text: 'Vui lòng nhập một số tiền hợp lệ (lớn hơn hoặc bằng 0)!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    var maNamHoc = maNamHocHienTai();
+    var btnLuu = document.getElementById('dvBtnLuuBudget');
+    btnLuu.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btnLuu.disabled = false;
+        if (res && res.success) {
+          dvHuySuaBudget();
+          dvTaiThangHienTai(dvThangDangXem); // tải lại để tính lại Còn lại + đồng bộ vào sheet
+        } else {
+          Swal.fire({ icon: 'error', title: 'Lỗi', text: (res && res.message) || 'Không thể lưu ngân sách.', confirmButtonColor: '#d33' });
+        }
+      })
+      .withFailureHandler(function(err) {
+        btnLuu.disabled = false;
+        Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
+      })
+      .luuNganSachDuTruDNVT(maNamHoc, giaTriMoi);
+  }
+
+  // 1. Mặc định tháng hiện tại khi mở trang
+  (function dvKhoiTaoMacDinh() {
+    var elThang = document.getElementById('dvThang');
+    if (elThang) elThang.value = dvFormatThang(new Date());
+  })();
+
+  // 2. Chuyển tab (Nhập / Tra cứu / Thống kê)
+  function chuyenTabDNVT(tabName) {
+    document.getElementById('dv-tab-nhap').classList.remove('active');
+    document.getElementById('dv-tab-tracuu').classList.remove('active');
+    document.getElementById('dv-tab-thongke').classList.remove('active');
+
+    var navs = document.querySelectorAll('.dv-nav-item');
+    navs.forEach(function(n) { n.classList.remove('active'); });
+
+    if (tabName === 'nhap') {
+      document.getElementById('dv-tab-nhap').classList.add('active');
+      navs[0].classList.add('active');
+    } else if (tabName === 'tracuu') {
+      document.getElementById('dv-tab-tracuu').classList.add('active');
+      navs[1].classList.add('active');
+    } else if (tabName === 'thongke') {
+      document.getElementById('dv-tab-thongke').classList.add('active');
+      navs[2].classList.add('active');
+    }
+  }
+
+  // 3. Khởi động module (gọi từ Index_JS.html khi mở trang Đề nghị vật tư)
+  function taiDanhSachDNVT() {
+    doiThangDNVT();
+  }
+
+  // 4. Tính thành tiền tạm ở ô đang nhập
+  function tinhThanhTienDNVT() {
+    var sl = Number(document.getElementById('dvSoLuong').value) || 0;
+    var dg = Number(document.getElementById('dvDonGia').value) || 0;
+    document.getElementById('dvThanhTienTam').value = dvFormatTien(sl * dg);
+  }
+
+  // 5. Khi đổi Tháng sử dụng -> tải lại danh sách đã lưu của tháng đó
+  //    (cảnh báo nếu danh sách chờ hiện tại chưa được lưu)
+  function doiThangDNVT() {
+    var thangVal = document.getElementById('dvThang').value;
+    if (!thangVal) return;
+
+    if (dvDanhSachCho.length > 0 && thangVal !== dvThangDangXem && dvThangDangXem !== '') {
+      Swal.fire({
+        title: 'Bạn chưa lưu dữ liệu!',
+        text: 'Danh sách mặt hàng vừa thêm cho tháng ' + dvFormatThangHienThi(dvThangDangXem) +
+              ' sẽ bị mất nếu chuyển tháng mà chưa bấm Lưu. Cô có chắc muốn tiếp tục?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Bỏ qua & Chuyển tháng',
+        cancelButtonText: 'Ở lại nhập tiếp'
+      }).then(function(result) {
+        if (result.isConfirmed) {
+          dvDanhSachCho = [];
+          renderDanhSachChoDNVT();
+          dvTaiThangHienTai(thangVal);
+        } else {
+          document.getElementById('dvThang').value = dvThangDangXem;
+        }
+      });
+    } else {
+      dvTaiThangHienTai(thangVal);
+    }
+  }
+
+  function dvTaiThangHienTai(thangVal) {
+    dvThangDangXem = thangVal;
+    document.getElementById('dvThangHienThi').innerText = dvFormatThangHienThi(thangVal);
+    document.getElementById('dvThangHienThi2').innerText = dvFormatThangHienThi(thangVal);
+    document.getElementById('dvDanhSachDaLuu').innerHTML = '<div class="dv-empty">Đang tải dữ liệu...</div>';
+
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        dvDanhSachDaLuu = (res && res.danhSach) || [];
+        renderDanhSachDaLuuDNVT(res && res.tong);
+        renderNganSachDNVT(res && res.nganSach);
+      })
+      .withFailureHandler(function(err) {
+        dvDanhSachDaLuu = [];
+        document.getElementById('dvDanhSachDaLuu').innerHTML = '<div class="dv-empty">Lỗi tải dữ liệu: ' + err + '</div>';
+        renderNganSachDNVT(null);
+      })
+      .layDeNghiVatTuTheoThang(maNamHoc, thangVal);
+  }
+
+  // 6. Thêm 1 mặt hàng vào danh sách CHỜ (chưa lưu lên Sheet)
+  function themMatHangVaoDanhSach() {
+    var ten = document.getElementById('dvTenMH').value.trim();
+    var dvt = document.getElementById('dvDVT').value.trim();
+    var sl = Number(document.getElementById('dvSoLuong').value) || 0;
+    var dg = Number(document.getElementById('dvDonGia').value) || 0;
+    var ghiChu = document.getElementById('dvGhiChu').value.trim();
+
+    if (!ten) {
+      Swal.fire({ icon: 'warning', title: 'Thiếu thông tin', text: 'Vui lòng nhập Tên mặt hàng!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+    if (sl <= 0) {
+      Swal.fire({ icon: 'warning', title: 'Thiếu thông tin', text: 'Vui lòng nhập Số lượng lớn hơn 0!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    dvDanhSachCho.push({ tenMatHang: ten, dvt: dvt, soLuong: sl, donGia: dg, ghiChu: ghiChu });
+    renderDanhSachChoDNVT();
+
+    document.getElementById('dvTenMH').value = '';
+    document.getElementById('dvDVT').value = '';
+    document.getElementById('dvSoLuong').value = '';
+    document.getElementById('dvDonGia').value = '';
+    document.getElementById('dvGhiChu').value = '';
+    document.getElementById('dvThanhTienTam').value = '';
+    document.getElementById('dvTenMH').focus();
+  }
+
+  // 7. Vẽ lại bảng danh sách CHỜ (đang nhập, chưa lưu)
+  function renderDanhSachChoDNVT() {
+    var box = document.getElementById('dvDanhSachCho');
+    if (!dvDanhSachCho || dvDanhSachCho.length === 0) {
+      box.innerHTML = '<div class="dv-empty">Chưa có mặt hàng nào chờ lưu.</div>';
+      return;
+    }
+
+    var html = '<div class="dv-table-wrap"><table class="dv-table"><thead><tr>' +
+      '<th>Tên mặt hàng</th><th>ĐVT</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    dvDanhSachCho.forEach(function(item, idx) {
+      html += '<tr>' +
+        '<td>' + item.tenMatHang + '</td>' +
+        '<td>' + (item.dvt || '') + '</td>' +
+        '<td>' + item.soLuong + '</td>' +
+        '<td>' + dvFormatTien(item.donGia) + '</td>' +
+        '<td>' + dvFormatTien(item.soLuong * item.donGia) + '</td>' +
+        '<td><button type="button" class="dv-btn-remove" onclick="xoaDongChoDNVT(' + idx + ')">Xóa</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+  }
+
+  function xoaDongChoDNVT(idx) {
+    dvDanhSachCho.splice(idx, 1);
+    renderDanhSachChoDNVT();
+  }
+
+  // 8. Vẽ lại bảng danh sách ĐÃ LƯU (đọc từ Sheet của tháng đang xem)
+  function renderDanhSachDaLuuDNVT(tong) {
+    var box = document.getElementById('dvDanhSachDaLuu');
+    var tongBox = document.getElementById('dvTongBox');
+
+    if (!dvDanhSachDaLuu || dvDanhSachDaLuu.length === 0) {
+      box.innerHTML = '<div class="dv-empty">Tháng này chưa có mặt hàng nào được đề nghị.</div>';
+      tongBox.style.display = 'none';
+      return;
+    }
+
+    var html = '<div class="dv-table-wrap"><table class="dv-table"><thead><tr>' +
+      '<th>Tên mặt hàng</th><th>ĐVT</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th>Ghi chú</th><th></th>' +
+      '</tr></thead><tbody>';
+
+    dvDanhSachDaLuu.forEach(function(item, idx) {
+      html += '<tr>' +
+        '<td>' + item.tenMatHang + '</td>' +
+        '<td>' + (item.dvt || '') + '</td>' +
+        '<td>' + item.soLuong + '</td>' +
+        '<td>' + dvFormatTien(item.donGia) + '</td>' +
+        '<td>' + dvFormatTien(item.thanhTien) + '</td>' +
+        '<td>' + (item.ghiChu || '') + '</td>' +
+        '<td><button type="button" class="dv-btn-remove" onclick="xoaMatHangDaLuuDNVT(' + idx + ')">Xóa</button></td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+
+    document.getElementById('dvTongTien').innerText = dvFormatTien(tong);
+    tongBox.style.display = 'block';
+  }
+
+  // 9. Xóa 1 mặt hàng ĐÃ LƯU trực tiếp trên Sheet (có xác nhận)
+  function xoaMatHangDaLuuDNVT(idx) {
+    var item = dvDanhSachDaLuu[idx];
+    if (!item) return;
+
+    Swal.fire({
+      title: 'Xóa mặt hàng?',
+      text: 'Cô có chắc muốn xóa "' + item.tenMatHang + '" khỏi phiếu đề nghị tháng ' + dvFormatThangHienThi(dvThangDangXem) + ' không?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Xóa',
+      cancelButtonText: 'Không'
+    }).then(function(result) {
+      if (result.isConfirmed) {
+        var maNamHoc = maNamHocHienTai();
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.success) {
+              dvTaiThangHienTai(dvThangDangXem);
+            } else {
+              Swal.fire({ icon: 'error', title: 'Lỗi', text: (res && res.message) || 'Không thể xóa mặt hàng.', confirmButtonColor: '#d33' });
+            }
+          })
+          .withFailureHandler(function(err) {
+            Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
+          })
+          .xoaMatHangDNVT(maNamHoc, dvThangDangXem, idx);
+      }
+    });
+  }
+
+  // 10. Lưu toàn bộ danh sách CHỜ lên Sheet của tháng đang chọn
+  function luuDNVT() {
+    if (!dvThangDangXem) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn Tháng sử dụng trước khi lưu!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+    if (dvDanhSachCho.length === 0) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Chưa có mặt hàng nào để lưu. Vui lòng thêm mặt hàng trước!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+
+    var btn = document.getElementById('dvBtnLuu');
+    btn.disabled = true;
+    btn.innerText = 'Đang lưu...';
+
+    var maNamHoc = maNamHocHienTai();
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.innerText = '💾 Lưu danh sách chờ';
+        if (res && res.success) {
+          dvDanhSachCho = [];
+          renderDanhSachChoDNVT();
+          dvTaiThangHienTai(dvThangDangXem);
+          Swal.fire({ icon: 'success', title: 'Thành công!', text: res.message, confirmButtonColor: '#1565c0', confirmButtonText: 'Đồng ý' });
+        } else {
+          Swal.fire({ icon: 'error', title: 'Lỗi khi lưu!', text: (res && res.message) || 'Không thể lưu dữ liệu.', confirmButtonColor: '#d33' });
+        }
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.innerText = '💾 Lưu danh sách chờ';
+        Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
+      })
+      .luuDeNghiVatTu({ maNamHoc: maNamHoc, thangSuDung: dvThangDangXem, danhSachMatHang: dvDanhSachCho });
+  }
+
+  // 11. Xuất Excel / PDF phiếu đề nghị vật tư của tháng đang chọn
+  function xuatDNVT(dinhDang) {
+    if (!dvThangDangXem) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn Tháng sử dụng trước khi xuất file!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
+    var maNamHoc = maNamHocHienTai();
+
+    var newTab = window.open('about:blank', '_blank');
+    if (newTab) {
+      newTab.document.write(
+        '<!DOCTYPE html><html><head><title>Đang tải phiếu...</title><meta charset="utf-8">' +
+        '<style>' +
+        '  body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f6f9; }' +
+        '  .card { background: #fff; padding: 35px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 420px; }' +
+        '  .spinner { border: 4px solid #bbdefb; border-top: 4px solid #1565c0; border-radius: 50%; width: 45px; height: 45px; animation: spin 0.9s linear infinite; margin: 0 auto 18px auto; }' +
+        '  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }' +
+        '  h3 { color: #1565c0; margin: 0 0 10px 0; font-size: 20px; }' +
+        '  p { color: #6c757d; font-size: 14px; margin: 0; line-height: 1.5; }' +
+        '  .btn { display: inline-block; margin-top: 15px; padding: 10px 20px; background: #1565c0; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; }' +
+        '</style></head><body>' +
+        '  <div class="card">' +
+        '    <div class="spinner" id="iconSpinner"></div>' +
+        '    <h3 id="txtTitle">⏳ Đang tạo phiếu</h3>' +
+        '    <p id="txtDesc">Dữ liệu đang được tổng hợp. Cô vui lòng đợi giây lát...</p>' +
+        '    <div id="btnContainer"></div>' +
+        '  </div>' +
+        '</body></html>'
+      );
+    }
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          if (newTab) {
+            newTab.document.getElementById('iconSpinner').style.display = 'none';
+            newTab.document.getElementById('txtTitle').innerText = "✅ Tải file thành công!";
+            newTab.document.getElementById('txtDesc').innerHTML = "File <b>" + res.fileName + "</b> đang tự động tải xuống thư mục Downloads.";
+            newTab.document.getElementById('btnContainer').innerHTML =
+              '<a href="' + res.downloadUrl + '" class="btn">Click vào đây nếu file chưa tải về</a>';
+            newTab.location.href = res.downloadUrl;
+          }
+        } else {
+          if (newTab) newTab.close();
+          Swal.fire({ icon: 'error', title: 'Thất bại', text: (res && res.message) || 'Không thể tạo file xuất.', confirmButtonColor: '#d33' });
+        }
+      })
+      .withFailureHandler(function(err) {
+        if (newTab) newTab.close();
+        Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
+      })
+      .xuatFileDNVT(dvThangDangXem, maNamHoc, dinhDang);
+  }
+</script>

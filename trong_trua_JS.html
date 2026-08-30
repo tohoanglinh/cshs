@@ -2,9 +2,10 @@
   // ==== Biến toàn cục của module Trông trưa ====
   var ttDanhSachGV = [];      // [{hoTen, boPhan}] toàn bộ nhân sự (tra Bộ phận tự động)
   var ttDanhSachLop = [];     // Danh sách lớp
-  var ttDanhSachNgayHienTai = []; // [{hoTen, boPhan, lop}] của ngày đang xem/nhập
-  var ttDanhSachNgayGoc = [];     // Bản gốc (đã tải/đã lưu) của ngày đang xem, để so sánh phát hiện thay đổi chưa lưu
-  var ttNgayDangXem = '';         // "yyyy-MM-dd" của ngày đang thực sự hiển thị trên màn hình
+  var ttDanhSachNgayHienTai = []; // [{ngay, hoTen, boPhan, lop}] của KHOẢNG NGÀY đang xem/nhập
+  var ttDanhSachNgayGoc = [];     // Bản gốc (đã tải/đã lưu) của khoảng đang xem, để so sánh phát hiện thay đổi chưa lưu
+  var ttTuNgayDangXem = '';       // "yyyy-MM-dd" - đầu khoảng ngày đang thực sự hiển thị trên màn hình
+  var ttDenNgayDangXem = '';      // "yyyy-MM-dd" - cuối khoảng ngày đang thực sự hiển thị trên màn hình
   var ttDanhSachThangHienTai = []; // [{ngay, ngayHienThi, danhSach}] các ngày có người của tháng đang chọn
 
   // 1. Hàm hỗ trợ định dạng ngày YYYY-MM-DD / YYYY-MM
@@ -25,13 +26,51 @@
     if (p.length !== 2) return thangStr;
     return p[1] + '/' + p[0];
   }
+  // "2026-08-28" -> "28/08/2026" (hiển thị)
+  function formatNgayHienThiTT(ngayStr) {
+    var p = (ngayStr || '').split('-');
+    if (p.length !== 3) return ngayStr;
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  // 1b. Hàm hỗ trợ xử lý Thứ trong tuần (dựng Date theo giờ địa phương để không lệch ngày)
+  function ttParseNgay(ngayStr) {
+    var p = (ngayStr || '').split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  }
+  function ttLaCuoiTuan(ngayStr) {
+    var thu = ttParseNgay(ngayStr).getDay(); // 0 = CN, 6 = T7
+    return thu === 0 || thu === 6;
+  }
+  // Trả về mảng "yyyy-MM-dd" của TẤT CẢ các ngày từ tuNgay đến denNgay (bao gồm 2 đầu mút)
+  function ttDanhSachNgayTrongKhoang(tuNgay, denNgay) {
+    var ket = [];
+    var d = ttParseNgay(tuNgay);
+    var dCuoi = ttParseNgay(denNgay);
+    var soNgayToiDa = 370; // giới hạn an toàn, tránh vòng lặp vô hạn nếu dữ liệu bất thường
+    var dem = 0;
+    while (d.getTime() <= dCuoi.getTime() && dem < soNgayToiDa) {
+      ket.push(ttFormatDate(d));
+      d.setDate(d.getDate() + 1);
+      dem++;
+    }
+    return ket;
+  }
+  // Kiểm tra thứ tự hợp lệ của khoảng ngày
+  function ttKiemTraThuTuKhoangNgay(tuNgay, denNgay) {
+    if (!tuNgay || !denNgay) return { hopLe: false, loi: 'Vui lòng chọn đầy đủ "Từ ngày" và "Đến ngày"!' };
+    if (denNgay < tuNgay) return { hopLe: false, loi: '"Đến ngày" phải sau hoặc bằng "Từ ngày"!' };
+    return { hopLe: true };
+  }
 
   // 2. Thiết lập mặc định: hôm nay & tháng hiện tại
   (function ttKhoiTaoMacDinh() {
     var today = new Date();
-    var elNgay = document.getElementById('ttNgay');
+    var elTu = document.getElementById('ttTuNgay');
+    var elDen = document.getElementById('ttDenNgay');
     var elThang = document.getElementById('ttThang');
-    if (elNgay) elNgay.value = ttFormatDate(today);
+    if (elTu) elTu.value = ttFormatDate(today);
+    if (elDen) elDen.value = ttFormatDate(today);
     if (elThang) elThang.value = ttFormatThang(today);
   })();
 
@@ -55,8 +94,6 @@
       navs[2].classList.add('active');
     }
   }
-
-  var ttDanhSachGV = []; // Biến lưu danh sách nhân sự toàn cục
 
   // 4. Tải danh sách nhân sự (Họ tên + Bộ phận) & danh sách lớp theo năm học đang chọn
   function taiDanhSachGVTrongTrua() {
@@ -82,8 +119,8 @@
       })
       .layDSGVChoTrongTrua(maNamHoc);
 
-    // Đồng thời tải luôn dữ liệu ngày đang chọn và tổng quan cả tháng
-    doiNgayTrongTrua();
+    // Đồng thời tải luôn dữ liệu khoảng ngày đang chọn và tổng quan cả tháng
+    doiKhoangNgayTrongTrua();
     taiDanhSachThangTT();
   }
 
@@ -99,17 +136,69 @@
     elBoPhan.value = found ? (found.boPhan || '') : '';
   }
 
-  // 6. Khi đổi Ngày nhập -> tải lại danh sách đã lưu của ngày đó, đồng bộ Tháng
-  function doiNgayTrongTrua() {
-    var ngayVal = document.getElementById('ttNgay').value;
-    if (!ngayVal) return;
+  // 6. Cập nhật nhãn "cho ngày .../cho khoảng từ ngày ... đến ngày ..." trong khung Thêm
+  function ttCapNhatNhanKhoangNgay(tuNgay, denNgay) {
+    var el = document.getElementById('ttKhoangNgayHienThi');
+    if (!el) return;
+    if (tuNgay === denNgay) {
+      el.innerText = 'ngày ' + formatNgayHienThiTT(tuNgay);
+    } else {
+      el.innerText = 'từ ngày ' + formatNgayHienThiTT(tuNgay) + ' đến ngày ' + formatNgayHienThiTT(denNgay);
+    }
+  }
 
-    // Đồng bộ ô Tháng theo Ngày đang chọn
+  // 6b. Cập nhật ô ghi chú cảnh báo (cuối tuần / không hợp lệ) & khóa nút Thêm khi cần
+  function ttCapNhatGhiChuKhoangNgay(tuNgay, denNgay) {
+    var el = document.getElementById('ttGhiChuKhoangNgay');
+    var btn = document.getElementById('ttBtnThem');
+    if (!el) return;
+    el.className = 'tt-range-note';
+    el.innerText = '';
+
+    var dsNgay = ttDanhSachNgayTrongKhoang(tuNgay, denNgay);
+    var ngayCuoiTuan = dsNgay.filter(ttLaCuoiTuan);
+    var ngayLamViec = dsNgay.filter(function(n) { return !ttLaCuoiTuan(n); });
+
+    if (ngayLamViec.length === 0) {
+      el.className = 'tt-range-note tt-note-error';
+      el.innerText = '❌ Khoảng ngày đã chọn toàn bộ rơi vào Thứ 7/Chủ nhật — trường không tổ chức trông trưa nên không thể thêm dữ liệu.';
+      if (btn) btn.disabled = true;
+      return;
+    }
+
+    if (btn) btn.disabled = false;
+
+    if (ngayCuoiTuan.length > 0) {
+      el.className = 'tt-range-note tt-note-warning';
+      el.innerText = '⚠️ Trong khoảng ngày này có ' + ngayCuoiTuan.length + ' ngày rơi vào Thứ 7/Chủ nhật (' +
+        ngayCuoiTuan.map(formatNgayHienThiTT).join(', ') +
+        ') — sẽ KHÔNG thêm dữ liệu cho những ngày đó.';
+    }
+  }
+
+  // 7. Khi đổi "Từ ngày"/"Đến ngày" -> tải lại danh sách đã lưu của cả khoảng, đồng bộ Tháng
+  function doiKhoangNgayTrongTrua() {
+    var tuNgay = document.getElementById('ttTuNgay').value;
+    var denNgay = document.getElementById('ttDenNgay').value;
+
+    var kt = ttKiemTraThuTuKhoangNgay(tuNgay, denNgay);
+    if (!kt.hopLe) {
+      var elNote = document.getElementById('ttGhiChuKhoangNgay');
+      var btn = document.getElementById('ttBtnThem');
+      elNote.className = 'tt-range-note tt-note-error';
+      elNote.innerText = '❌ ' + kt.loi;
+      if (btn) btn.disabled = true;
+      document.getElementById('ttDanhSachNgay').innerHTML = '<div class="tt-empty">Vui lòng chọn khoảng ngày hợp lệ.</div>';
+      return;
+    }
+
+    // Đồng bộ ô Tháng theo Từ ngày đang chọn
     var elThang = document.getElementById('ttThang');
-    var thangCuaNgay = ngayVal.substring(0, 7);
-    if (elThang && elThang.value !== thangCuaNgay) elThang.value = thangCuaNgay;
+    var thangCuaTuNgay = tuNgay.substring(0, 7);
+    if (elThang && elThang.value !== thangCuaTuNgay) elThang.value = thangCuaTuNgay;
 
-    document.getElementById('ttNgayHienThi').innerText = formatNgayHienThiTT(ngayVal);
+    ttCapNhatNhanKhoangNgay(tuNgay, denNgay);
+    ttCapNhatGhiChuKhoangNgay(tuNgay, denNgay);
 
     var maNamHoc = maNamHocHienTai();
     document.getElementById('ttDanhSachNgay').innerHTML = '<div class="tt-empty">Đang tải dữ liệu...</div>';
@@ -118,42 +207,50 @@
       .withSuccessHandler(function(res) {
         ttDanhSachNgayHienTai = res || [];
         ttDanhSachNgayGoc = JSON.parse(JSON.stringify(ttDanhSachNgayHienTai)); // lưu bản gốc để so sánh sau này
-        ttNgayDangXem = ngayVal;
-        renderDanhSachNgayTT();
-        renderDanhSachThangTT(); // cập nhật lại highlight ngày đang chọn trong danh sách tháng
+        ttTuNgayDangXem = tuNgay;
+        ttDenNgayDangXem = denNgay;
+        renderDanhSachKhoangTT();
+        renderDanhSachThangTT(); // cập nhật lại highlight khoảng ngày đang chọn trong danh sách tháng
       })
       .withFailureHandler(function(err) {
         ttDanhSachNgayHienTai = [];
         ttDanhSachNgayGoc = [];
-        ttNgayDangXem = ngayVal;
-        renderDanhSachNgayTT();
+        ttTuNgayDangXem = tuNgay;
+        ttDenNgayDangXem = denNgay;
+        renderDanhSachKhoangTT();
         renderDanhSachThangTT();
       })
-      .layTrongTruaTheoNgay(ngayVal, maNamHoc);
+      .layTrongTruaTheoKhoangNgay(tuNgay, denNgay, maNamHoc);
   }
 
-  // 6b. Kiểm tra xem danh sách đang nhập của ngày hiện tại có khác với bản gốc đã tải/lưu hay không
+  // 7b. Kiểm tra xem danh sách đang nhập của khoảng ngày hiện tại có khác với bản gốc đã tải/lưu hay không
   function coThayDoiChuaLuuTT() {
     return JSON.stringify(ttDanhSachNgayHienTai) !== JSON.stringify(ttDanhSachNgayGoc);
   }
 
-  // 6c. Chuyển "Ngày nhập dữ liệu" sang ngày mới, có cảnh báo nếu ngày hiện tại còn
-  //     dữ liệu vừa thêm mà CHƯA bấm Lưu (tránh mất dữ liệu do bấm nhầm/vô ý).
-  //     ngayMoi: chuỗi "yyyy-MM-dd". onHuy: hàm gọi lại nếu người dùng chọn KHÔNG chuyển.
-  function chuyenNgayTrongTruaCoXacNhan(ngayMoi, onHuy) {
-    var elNgay = document.getElementById('ttNgay');
+  // 7c. Đổi "Từ ngày"/"Đến ngày", có cảnh báo nếu khoảng ngày hiện tại còn dữ liệu
+  //     vừa thêm mà CHƯA bấm Lưu (tránh mất dữ liệu do bấm nhầm/vô ý).
+  //     onHuy: hàm gọi lại nếu người dùng chọn KHÔNG chuyển.
+  function doiKhoangNgayTrongTruaCoXacNhan(onHuy) {
+    var elTu = document.getElementById('ttTuNgay');
+    var elDen = document.getElementById('ttDenNgay');
 
     if (!coThayDoiChuaLuuTT()) {
-      elNgay.value = ngayMoi;
-      doiNgayTrongTrua();
+      doiKhoangNgayTrongTrua();
       taiDanhSachThangTT();
       return;
     }
 
+    var moTaKhoangCu = ttTuNgayDangXem
+      ? (ttTuNgayDangXem === ttDenNgayDangXem
+          ? 'ngày ' + formatNgayHienThiTT(ttTuNgayDangXem)
+          : 'từ ngày ' + formatNgayHienThiTT(ttTuNgayDangXem) + ' đến ngày ' + formatNgayHienThiTT(ttDenNgayDangXem))
+      : 'khoảng ngày hiện tại';
+
     Swal.fire({
       title: 'Bạn chưa lưu dữ liệu!',
-      text: 'Danh sách vừa thêm cho ngày ' + (formatNgayHienThiTT(ttNgayDangXem) || 'hiện tại') +
-            ' sẽ bị mất nếu chuyển sang ngày khác mà chưa bấm Lưu. Cô có chắc muốn tiếp tục?',
+      text: 'Danh sách vừa thêm cho ' + moTaKhoangCu +
+            ' sẽ bị mất nếu chuyển sang khoảng ngày khác mà chưa bấm Lưu. Cô có chắc muốn tiếp tục?',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
@@ -162,27 +259,33 @@
       cancelButtonText: 'Ở lại nhập tiếp'
     }).then(function(result) {
       if (result.isConfirmed) {
-        elNgay.value = ngayMoi;
-        doiNgayTrongTrua();
+        doiKhoangNgayTrongTrua();
         taiDanhSachThangTT();
       } else {
-        elNgay.value = ttNgayDangXem; // khôi phục lại ngày cũ trên ô input
+        elTu.value = ttTuNgayDangXem; // khôi phục lại khoảng ngày cũ trên 2 ô input
+        elDen.value = ttDenNgayDangXem;
         if (typeof onHuy === 'function') onHuy();
       }
     });
   }
 
-  // 7. Khi đổi Tháng làm việc -> tải lại Danh sách trông trưa cả tháng (chỉ ngày có người).
-  //    Nếu Ngày nhập dữ liệu đang chọn không thuộc tháng mới, đưa về ngày 1 của tháng đó
-  //    (có xác nhận nếu ngày cũ còn dữ liệu chưa lưu).
+  // 8. Khi đổi Tháng làm việc -> tải lại Danh sách trông trưa cả tháng (chỉ ngày có người).
+  //    Nếu "Từ ngày"/"Đến ngày" đang chọn không thuộc tháng mới, đưa cả 2 về ngày 1 của
+  //    tháng đó (có xác nhận nếu khoảng ngày cũ còn dữ liệu chưa lưu).
   function doiThangTrongTrua() {
     var thangVal = document.getElementById('ttThang').value;
-    var elNgay = document.getElementById('ttNgay');
+    var elTu = document.getElementById('ttTuNgay');
+    var elDen = document.getElementById('ttDenNgay');
     if (!thangVal) return;
 
-    if (elNgay.value && elNgay.value.substring(0, 7) !== thangVal) {
-      var thangCu = ttNgayDangXem ? ttNgayDangXem.substring(0, 7) : thangVal;
-      chuyenNgayTrongTruaCoXacNhan(thangVal + '-01', function() {
+    var tuThuocThangMoi = elTu.value && elTu.value.substring(0, 7) === thangVal;
+    var denThuocThangMoi = elDen.value && elDen.value.substring(0, 7) === thangVal;
+
+    if (!tuThuocThangMoi || !denThuocThangMoi) {
+      var thangCu = ttTuNgayDangXem ? ttTuNgayDangXem.substring(0, 7) : thangVal;
+      elTu.value = thangVal + '-01';
+      elDen.value = thangVal + '-01';
+      doiKhoangNgayTrongTruaCoXacNhan(function() {
         // Người dùng hủy chuyển ngày -> khôi phục lại Tháng làm việc về đúng tháng cũ
         document.getElementById('ttThang').value = thangCu;
         taiDanhSachThangTT();
@@ -192,7 +295,7 @@
     }
   }
 
-  // 7b. Tải Danh sách trông trưa của cả THÁNG đang chọn (gom theo ngày, chỉ ngày có người)
+  // 8b. Tải Danh sách trông trưa của cả THÁNG đang chọn (gom theo ngày, chỉ ngày có người)
   function taiDanhSachThangTT() {
     var thangVal = document.getElementById('ttThang').value;
     if (!thangVal) return;
@@ -214,7 +317,7 @@
       .layTrongTruaTheoThang(thangVal, maNamHoc);
   }
 
-  // 7c. Vẽ lại Danh sách trông trưa cả tháng - mỗi ngày là 1 thẻ, bấm vào để sửa/thêm ngày đó
+  // 8c. Vẽ lại Danh sách trông trưa cả tháng - mỗi ngày là 1 thẻ, bấm vào để sửa/thêm ngày đó
   function renderDanhSachThangTT() {
     var box = document.getElementById('ttDanhSachThang');
     if (!box) return;
@@ -224,11 +327,10 @@
       return;
     }
 
-    var ngayDangChon = document.getElementById('ttNgay').value;
-
     var html = '';
     ttDanhSachThangHienTai.forEach(function(ngayObj) {
-      var dangChon = (ngayObj.ngay === ngayDangChon);
+      var dangChon = !!(ttTuNgayDangXem && ttDenNgayDangXem &&
+        ngayObj.ngay >= ttTuNgayDangXem && ngayObj.ngay <= ttDenNgayDangXem);
       var tenNguoi = ngayObj.danhSach.map(function(p) {
         return p.hoTen + (p.lop ? ' (' + p.lop + ')' : '');
       }).join(', ');
@@ -243,28 +345,28 @@
     box.innerHTML = html;
   }
 
-  // 7d. Bấm vào 1 ngày trong Danh sách tháng -> đưa ngày đó vào ô "Ngày nhập dữ liệu"
+  // 8d. Bấm vào 1 ngày trong Danh sách tháng -> đưa ngày đó vào cả "Từ ngày" và "Đến ngày"
   //     để xem/sửa/thêm người ngay trong khung Thêm người trông trưa phía trên
-  //     (có xác nhận nếu ngày đang xem còn dữ liệu chưa lưu).
+  //     (có xác nhận nếu khoảng đang xem còn dữ liệu chưa lưu).
   function chonNgayTuThangTT(ngayStr) {
-    chuyenNgayTrongTruaCoXacNhan(ngayStr);
+    document.getElementById('ttTuNgay').value = ngayStr;
+    document.getElementById('ttDenNgay').value = ngayStr;
+    doiKhoangNgayTrongTruaCoXacNhan();
 
     // Cuộn lên khung Thêm người để cô thấy ngay danh sách đang sửa
     var addCard = document.querySelector('.tt-add-card');
     if (addCard) addCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function formatNgayHienThiTT(ngayStr) {
-    var p = ngayStr.split('-');
-    if (p.length !== 3) return ngayStr;
-    return p[2] + '/' + p[1] + '/' + p[0];
-  }
-
-  // 8. Thêm 1 người vào danh sách của ngày đang chọn (chưa lưu server, chỉ ở giao diện)
+  // 9. Thêm 1 người vào TẤT CẢ các ngày làm việc (Thứ 2 - Thứ 6) trong khoảng
+  //    "Từ ngày" - "Đến ngày" đang chọn (chưa lưu server, chỉ ở giao diện).
+  //    Ngày rơi vào Thứ 7/Chủ nhật sẽ tự động bị bỏ qua kèm cảnh báo.
   function themNguoiTrongTrua() {
     var hoTen = document.getElementById('ttHoTen').value.trim();
     var boPhan = document.getElementById('ttBoPhan').value.trim();
     var lop = document.getElementById('ttLop').value.trim();
+    var tuNgay = document.getElementById('ttTuNgay').value;
+    var denNgay = document.getElementById('ttDenNgay').value;
 
     if (!hoTen) {
       Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng nhập Họ và tên!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
@@ -275,66 +377,138 @@
       return;
     }
 
-    // 1. KIỂM TRA TRÙNG LỚP TRONG NGÀY
-    var idxTrungLop = ttDanhSachNgayHienTai.findIndex(function(item) {
-      return (item.lop || '').trim().toLowerCase() === lop.toLowerCase();
-    });
+    var kt = ttKiemTraThuTuKhoangNgay(tuNgay, denNgay);
+    if (!kt.hopLe) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: kt.loi, confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+      return;
+    }
 
-    if (idxTrungLop !== -1) {
-      var nguoiDangTrong = ttDanhSachNgayHienTai[idxTrungLop].hoTen;
-      // Nếu lớp đó đã có người khác đăng ký -> Báo lỗi và chặn lại
-      if ((nguoiDangTrong || '').trim().toLowerCase() !== hoTen.toLowerCase()) {
-        Swal.fire({
-          icon: 'warning',
-          title: 'Trùng lớp trông!',
-          text: 'Lớp ' + lop + ' đã có ' + nguoiDangTrong + ' đăng ký trông rồi.',
-          confirmButtonColor: '#f59e0b',
-          confirmButtonText: 'Đã hiểu'
-        });
-        return;
+    var dsNgay = ttDanhSachNgayTrongKhoang(tuNgay, denNgay);
+    var ngayHopLe = dsNgay.filter(function(n) { return !ttLaCuoiTuan(n); });
+    var ngayCuoiTuanBiBoQua = dsNgay.filter(ttLaCuoiTuan);
+
+    // Đúng theo yêu cầu: nếu cả khoảng (kể cả trường hợp nhập 1 ngày, Từ ngày = Đến ngày)
+    // đều rơi vào Thứ 7/Chủ nhật thì KHÔNG điền thông tin, chỉ đưa ra cảnh báo.
+    if (ngayHopLe.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Không thể thêm!',
+        text: (tuNgay === denNgay ? 'Ngày ' + formatNgayHienThiTT(tuNgay) : 'Khoảng ngày đã chọn') +
+              ' rơi vào Thứ 7/Chủ nhật — trường không tổ chức trông trưa nên không thể thêm dữ liệu.',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'Đã hiểu'
+      });
+      return;
+    }
+
+    // 1. KIỂM TRA TRÙNG LỚP cho từng ngày hợp lệ, ngày nào trùng thì bỏ qua ngày đó
+    var ngayTrungLop = [];  // [{ngay, nguoiDangTrong}]
+    var ngayDaThem = [];    // các ngày thực sự thêm/cập nhật thành công
+
+    ngayHopLe.forEach(function(ngay) {
+      var idxTrungLop = ttDanhSachNgayHienTai.findIndex(function(item) {
+        return item.ngay === ngay && (item.lop || '').trim().toLowerCase() === lop.toLowerCase();
+      });
+
+      if (idxTrungLop !== -1) {
+        var nguoiDangTrong = ttDanhSachNgayHienTai[idxTrungLop].hoTen;
+        if ((nguoiDangTrong || '').trim().toLowerCase() !== hoTen.toLowerCase()) {
+          ngayTrungLop.push({ ngay: ngay, nguoiDangTrong: nguoiDangTrong });
+          return; // Bỏ qua ngày này, không thêm
+        }
       }
-    }
 
-    // 2. Nếu người này đã có trong danh sách -> cập nhật lại Lớp/Bộ phận
-    var idxTrung = ttDanhSachNgayHienTai.findIndex(function(item) {
-      return (item.hoTen || '').trim().toLowerCase() === hoTen.toLowerCase();
+      // 2. Nếu người này đã có trong danh sách của đúng ngày đó -> cập nhật lại Lớp/Bộ phận
+      var idxTrung = ttDanhSachNgayHienTai.findIndex(function(item) {
+        return item.ngay === ngay && (item.hoTen || '').trim().toLowerCase() === hoTen.toLowerCase();
+      });
+
+      if (idxTrung !== -1) {
+        ttDanhSachNgayHienTai[idxTrung].boPhan = boPhan;
+        ttDanhSachNgayHienTai[idxTrung].lop = lop;
+      } else {
+        ttDanhSachNgayHienTai.push({ ngay: ngay, hoTen: hoTen, boPhan: boPhan, lop: lop });
+      }
+      ngayDaThem.push(ngay);
     });
 
-    if (idxTrung !== -1) {
-      ttDanhSachNgayHienTai[idxTrung].boPhan = boPhan;
-      ttDanhSachNgayHienTai[idxTrung].lop = lop;
-    } else {
-      ttDanhSachNgayHienTai.push({ hoTen: hoTen, boPhan: boPhan, lop: lop });
+    // Gom các cảnh báo lại (nếu có) để hiển thị 1 lần, tránh làm phiền nhiều lần
+    var canhBao = [];
+    if (ngayCuoiTuanBiBoQua.length > 0) {
+      canhBao.push('⚠️ ' + ngayCuoiTuanBiBoQua.length + ' ngày rơi vào Thứ 7/Chủ nhật (' +
+        ngayCuoiTuanBiBoQua.map(formatNgayHienThiTT).join(', ') + ') đã được BỎ QUA vì trường không tổ chức trông trưa.');
+    }
+    if (ngayTrungLop.length > 0) {
+      var chiTiet = ngayTrungLop.map(function(x) {
+        return formatNgayHienThiTT(x.ngay) + ' (đã có ' + x.nguoiDangTrong + ')';
+      }).join('; ');
+      canhBao.push('⚠️ Lớp ' + lop + ' đã có người trông vào: ' + chiTiet + ' — những ngày này đã được BỎ QUA.');
     }
 
-    renderDanhSachNgayTT();
+    if (ngayDaThem.length === 0) {
+      // Không thêm được ngày nào (toàn bộ bị trùng lớp) -> chỉ cảnh báo, giữ nguyên form để cô sửa
+      Swal.fire({
+        icon: 'warning',
+        title: 'Không thêm được ngày nào!',
+        html: canhBao.join('<br><br>') || 'Không có ngày hợp lệ để thêm.',
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'Đã hiểu'
+      });
+      return;
+    }
 
-    // Xóa trắng ô nhập để nhập tiếp
+    renderDanhSachKhoangTT();
+
+    if (canhBao.length > 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Đã thêm, nhưng có lưu ý',
+        html: 'Đã thêm <b>' + hoTen + '</b> vào <b>' + ngayDaThem.length + '</b> ngày.<br><br>' + canhBao.join('<br><br>'),
+        confirmButtonColor: '#1b8754',
+        confirmButtonText: 'Đã hiểu'
+      });
+    }
+
+    // Xóa trắng ô nhập để nhập tiếp (giữ nguyên khoảng ngày để thêm người khác)
     document.getElementById('ttHoTen').value = '';
     document.getElementById('ttBoPhan').value = '';
     document.getElementById('ttLop').value = '';
     document.getElementById('ttHoTen').focus();
   }
 
-  // 9. Vẽ lại bảng danh sách của ngày đang chọn
-  function renderDanhSachNgayTT() {
+  // 10. Vẽ lại bảng danh sách của khoảng ngày đang chọn (hiện thêm cột Ngày khi khoảng > 1 ngày)
+  function renderDanhSachKhoangTT() {
     var box = document.getElementById('ttDanhSachNgay');
 
     if (!ttDanhSachNgayHienTai || ttDanhSachNgayHienTai.length === 0) {
-      box.innerHTML = '<div class="tt-empty">Chưa có ai được xếp trông trưa ngày này.</div>';
+      box.innerHTML = '<div class="tt-empty">Chưa có ai được xếp trông trưa trong khoảng ngày này.</div>';
       return;
     }
 
+    var coNhieuNgay = document.getElementById('ttTuNgay').value !== document.getElementById('ttDenNgay').value;
+
+    // Sắp xếp hiển thị theo Ngày rồi theo Họ và tên, nhưng vẫn xóa đúng theo chỉ số gốc
+    var dsHienThi = ttDanhSachNgayHienTai
+      .map(function(item, idxGoc) { return { item: item, idxGoc: idxGoc }; })
+      .sort(function(a, b) {
+        if (a.item.ngay !== b.item.ngay) return a.item.ngay < b.item.ngay ? -1 : 1;
+        return (a.item.hoTen || '').localeCompare(b.item.hoTen || '');
+      });
+
     var html = '<div class="tt-table-wrap"><table class="tt-table"><thead><tr>' +
+      (coNhieuNgay ? '<th>Ngày</th>' : '') +
       '<th>Họ và tên</th><th>Bộ phận</th><th>Lớp</th><th></th>' +
       '</tr></thead><tbody>';
 
-    ttDanhSachNgayHienTai.forEach(function(item, idx) {
-      html += '<tr>' +
+    dsHienThi.forEach(function(o) {
+      var item = o.item;
+      var weekend = ttLaCuoiTuan(item.ngay);
+      html += '<tr' + (weekend ? ' class="tt-row-weekend"' : '') + '>' +
+        (coNhieuNgay ? '<td class="tt-col-ngay">' + formatNgayHienThiTT(item.ngay) + '</td>' : '') +
         '<td>' + item.hoTen + '</td>' +
         '<td>' + (item.boPhan || '') + '</td>' +
         '<td class="tt-col-lop">' + (item.lop || '') + '</td>' +
-        '<td><button type="button" class="tt-btn-remove" onclick="xoaDongTrongTrua(' + idx + ')">Xóa</button></td>' +
+        '<td><button type="button" class="tt-btn-remove" onclick="xoaDongTrongTrua(' + o.idxGoc + ')">Xóa</button></td>' +
         '</tr>';
     });
 
@@ -342,18 +516,18 @@
     box.innerHTML = html;
   }
 
-  // 10. Xóa 1 dòng khỏi danh sách của ngày (chỉ trên giao diện, cần bấm Lưu để áp dụng)
+  // 11. Xóa 1 dòng khỏi danh sách của khoảng ngày (chỉ trên giao diện, cần bấm Lưu để áp dụng)
   function xoaDongTrongTrua(idx) {
     var item = ttDanhSachNgayHienTai[idx];
     if (!item) return;
 
     var tenHienThi = item.hoTen;
     var lopHienThi = item.lop ? ' lớp ' + item.lop : '';
-    var ngayHienThi = formatNgayHienThiTT(ttNgayDangXem || document.getElementById('ttNgay').value);
+    var ngayHienThi = formatNgayHienThiTT(item.ngay);
 
     Swal.fire({
       title: 'Xóa người trông trưa?',
-      text: 'Cô có chắc muốn xóa ' + tenHienThi + ' khỏi danh sách trông trưa ' + lopHienThi + ' vào ngày ' + ngayHienThi + ' không?',
+      text: 'Cô có chắc muốn xóa ' + tenHienThi + ' khỏi danh sách trông trưa' + lopHienThi + ' vào ngày ' + ngayHienThi + ' không?',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
@@ -363,16 +537,17 @@
     }).then(function(result) {
       if (result.isConfirmed) {
         ttDanhSachNgayHienTai.splice(idx, 1);
-        renderDanhSachNgayTT();
+        renderDanhSachKhoangTT();
       }
     });
   }
 
-  // 11. Lưu toàn bộ danh sách của ngày đang chọn lên Sheet (ghi đè đúng ngày đó)
+  // 12. Lưu toàn bộ danh sách của khoảng ngày đang chọn lên Sheet (ghi đè đúng khoảng đó)
   function luuTrongTrua() {
-    var ngayVal = document.getElementById('ttNgay').value;
-    if (!ngayVal) {
-      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn Ngày trước khi lưu!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
+    var tuNgay = ttTuNgayDangXem || document.getElementById('ttTuNgay').value;
+    var denNgay = ttDenNgayDangXem || document.getElementById('ttDenNgay').value;
+    if (!tuNgay || !denNgay) {
+      Swal.fire({ icon: 'warning', title: 'Nhắc nhở', text: 'Vui lòng chọn khoảng ngày trước khi lưu!', confirmButtonColor: '#f59e0b', confirmButtonText: 'Đã hiểu' });
       return;
     }
 
@@ -398,10 +573,10 @@
         btn.innerText = '💾 Lưu';
         Swal.fire({ icon: 'error', title: 'Lỗi khi lưu!', text: err, confirmButtonColor: '#d33' });
       })
-      .luuTrongTruaTheoNgay(ngayVal, maNamHoc, ttDanhSachNgayHienTai);
+      .luuTrongTruaTheoKhoangNgay(tuNgay, denNgay, maNamHoc, ttDanhSachNgayHienTai);
   }
 
-  // 12. Xuất Excel bảng chấm công trông trưa cho cả THÁNG đang chọn
+  // 13. Xuất Excel bảng chấm công trông trưa cho cả THÁNG đang chọn
   function xuatExcelTrongTrua() {
     var thangVal = document.getElementById('ttThang').value; // yyyy-MM
     if (!thangVal) {

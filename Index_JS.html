@@ -11,12 +11,11 @@
     document.getElementById("trucCongPage").style.display = "none";
     document.getElementById("nhanSuPage").style.display = "none";
     document.getElementById("trongTruaPage").style.display = "none";
-    
+    document.getElementById("dnvtPage").style.display = "none";
+
     document.getElementById(pageId).style.display = "block";
     hienHeaderToTruong(true);
 
-    // Tải lại dữ liệu theo năm học đang chọn mỗi khi vào sub-page,
-    // thay vì chỉ đọc 1 lần lúc trang mở đầu tiên
     if (pageId === 'cshsPage' && typeof taiDanhSachLopBaoCao === 'function') {
       taiDanhSachLopBaoCao();
     } else if (pageId === 'trucCongPage' && typeof taiDuLieuTuSheet === 'function') {
@@ -25,6 +24,8 @@
       taiDanhSachGV();
     } else if (pageId === 'trongTruaPage' && typeof taiDanhSachGVTrongTrua === 'function') {
       taiDanhSachGVTrongTrua();
+    } else if (pageId === 'dnvtPage' && typeof taiDanhSachDNVT === 'function') {
+      taiDanhSachDNVT();
     }
   }
 
@@ -33,6 +34,7 @@
     document.getElementById("trucCongPage").style.display = "none";
     document.getElementById("nhanSuPage").style.display = "none";
     document.getElementById("trongTruaPage").style.display = "none";
+    document.getElementById("dnvtPage").style.display = "none";
     document.getElementById("mainPage").style.display = "block";
     hienHeaderToTruong(false);
   }
