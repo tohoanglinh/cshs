@@ -1703,3 +1703,60 @@ function xuatFileDNVT(thangSuDung, maNamHoc, dinhDang) {
     return { success: false, message: "Lỗi: " + err.toString() };
   }
 }
+
+// 3b. SỬA 1 mặt hàng đã lưu (viTriDong = chỉ số trong mảng trả về bởi layDeNghiVatTuTheoThang)
+//     duLieuMoi = { tenMatHang, dvt, soLuong, donGia, ghiChu }
+//     tenCu     = tên mặt hàng lúc mở form sửa, dùng để đối chiếu, tránh sửa nhầm dòng
+//                 nếu phiếu đã bị thay đổi ở nơi khác (VD: mở 2 máy cùng lúc)
+function suaMatHangDNVT(maNamHoc, thangSuDung, viTriDong, duLieuMoi, tenCu) {
+  try {
+    var parts = (thangSuDung || "").split("-");
+    var nam = parseInt(parts[0], 10);
+    var thang = parseInt(parts[1], 10);
+
+    if (!duLieuMoi || !duLieuMoi.tenMatHang || duLieuMoi.tenMatHang.toString().trim() === "") {
+      return { success: false, message: "Tên mặt hàng không được để trống!" };
+    }
+    var soLuong = Number(duLieuMoi.soLuong) || 0;
+    var donGia = Number(duLieuMoi.donGia) || 0;
+    if (soLuong <= 0) return { success: false, message: "Số lượng phải lớn hơn 0!" };
+    if (donGia < 0) return { success: false, message: "Đơn giá không được âm!" };
+
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName(tenSheetThangDNVT(nam, thang));
+    if (!sheet) return { success: false, message: "Chưa có phiếu đề nghị của tháng này!" };
+
+    var ct = layCauTrucBangDNVT(sheet);
+    var danhSachHang = [];
+    for (var r = ct.hangHeader + 1; r < ct.hangTong; r++) {
+      var ten = sheet.getRange(r, ct.colTenMH).getValue();
+      if (ten && ten.toString().trim() !== "") danhSachHang.push(r);
+    }
+
+    var hangCanSua = danhSachHang[viTriDong];
+    if (!hangCanSua) return { success: false, message: "Không tìm thấy mặt hàng cần sửa!" };
+
+    // Đối chiếu tên cũ: nếu khác nghĩa là phiếu đã đổi so với màn hình đang xem
+    if (tenCu !== undefined && tenCu !== null) {
+      var tenHienTai = sheet.getRange(hangCanSua, ct.colTenMH).getValue().toString().trim();
+      if (tenHienTai !== tenCu.toString().trim()) {
+        return { success: false, message: "Dữ liệu trên phiếu đã thay đổi. Vui lòng đóng cửa sổ này, chọn lại tháng để tải lại rồi sửa lại!" };
+      }
+    }
+
+    sheet.getRange(hangCanSua, ct.colTenMH).setValue(duLieuMoi.tenMatHang.toString().trim());
+    sheet.getRange(hangCanSua, ct.colDVT).setValue((duLieuMoi.dvt || "").toString().trim());
+    sheet.getRange(hangCanSua, ct.colSL).setValue(soLuong);
+    sheet.getRange(hangCanSua, ct.colDonGia).setValue(donGia);
+    sheet.getRange(hangCanSua, ct.colThanhTien).setValue(soLuong * donGia);
+    sheet.getRange(hangCanSua, ct.colGhiChu).setValue((duLieuMoi.ghiChu || "").toString().trim());
+
+    capNhatSttVaTongDNVT(sheet, ct);
+    SpreadsheetApp.flush(); // đảm bảo công thức TỔNG đã tính lại trước khi tính Ngân sách/Đã chi
+    var nganSach = layNganSachDNVT(maNamHoc, nam, thang);
+
+    return { success: true, message: "Đã cập nhật mặt hàng!", nganSach: nganSach };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
+}

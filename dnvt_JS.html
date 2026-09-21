@@ -279,7 +279,10 @@
         '<td>' + dvFormatTien(item.donGia) + '</td>' +
         '<td>' + dvFormatTien(item.thanhTien) + '</td>' +
         '<td>' + (item.ghiChu || '') + '</td>' +
-        '<td><button type="button" class="dv-btn-remove" onclick="xoaMatHangDaLuuDNVT(' + idx + ')">Xóa</button></td>' +
+        '<td class="dv-action-cell">' +
+          '<button type="button" class="dv-btn-edit" onclick="suaMatHangDaLuuDNVT(' + idx + ')">Sửa</button>' +
+          '<button type="button" class="dv-btn-remove" onclick="xoaMatHangDaLuuDNVT(' + idx + ')">Xóa</button>' +
+        '</td>' +
         '</tr>';
     });
 
@@ -319,6 +322,88 @@
             Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
           })
           .xoaMatHangDNVT(maNamHoc, dvThangDangXem, idx);
+      }
+    });
+  }
+
+  // 9b. Sửa 1 mặt hàng ĐÃ LƯU: mở hộp thoại chỉnh sửa, bấm Lưu thì ghi thẳng lên Sheet
+  function dvEscapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function suaMatHangDaLuuDNVT(idx) {
+    var item = dvDanhSachDaLuu[idx];
+    if (!item) return;
+
+    Swal.fire({
+      title: 'Sửa mặt hàng',
+      html:
+        '<div class="dv-edit-form">' +
+          '<label>Tên mặt hàng</label>' +
+          '<input type="text" id="dvEditTen" value="' + dvEscapeHtml(item.tenMatHang) + '">' +
+          '<div class="dv-edit-row">' +
+            '<div><label>ĐVT</label><input type="text" id="dvEditDVT" value="' + dvEscapeHtml(item.dvt) + '"></div>' +
+            '<div><label>Số lượng</label><input type="number" id="dvEditSL" min="0" step="any" value="' + dvEscapeHtml(item.soLuong) + '"></div>' +
+            '<div><label>Đơn giá</label><input type="number" id="dvEditDG" min="0" step="any" value="' + dvEscapeHtml(item.donGia) + '"></div>' +
+          '</div>' +
+          '<label>Ghi chú</label>' +
+          '<input type="text" id="dvEditGhiChu" value="' + dvEscapeHtml(item.ghiChu) + '">' +
+          '<div class="dv-edit-total">Thành tiền: <b id="dvEditTT">0 đ</b></div>' +
+        '</div>',
+      showCancelButton: true,
+      confirmButtonText: '💾 Lưu thay đổi',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#1565c0',
+      cancelButtonColor: '#9e9e9e',
+      showLoaderOnConfirm: true,
+      allowOutsideClick: function() { return !Swal.isLoading(); },
+      didOpen: function() {
+        var elSL = document.getElementById('dvEditSL');
+        var elDG = document.getElementById('dvEditDG');
+        var elTT = document.getElementById('dvEditTT');
+        function tinh() {
+          elTT.innerText = dvFormatTien((Number(elSL.value) || 0) * (Number(elDG.value) || 0));
+        }
+        elSL.addEventListener('input', tinh);
+        elDG.addEventListener('input', tinh);
+        tinh();
+      },
+      preConfirm: function() {
+        var ten = document.getElementById('dvEditTen').value.trim();
+        var dvt = document.getElementById('dvEditDVT').value.trim();
+        var sl = Number(document.getElementById('dvEditSL').value) || 0;
+        var dg = Number(document.getElementById('dvEditDG').value) || 0;
+        var ghiChu = document.getElementById('dvEditGhiChu').value.trim();
+
+        if (!ten) { Swal.showValidationMessage('Vui lòng nhập Tên mặt hàng!'); return false; }
+        if (sl <= 0) { Swal.showValidationMessage('Số lượng phải lớn hơn 0!'); return false; }
+        if (dg < 0) { Swal.showValidationMessage('Đơn giá không được âm!'); return false; }
+
+        var maNamHoc = maNamHocHienTai();
+        return new Promise(function(resolve) {
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.success) {
+                resolve(res);
+              } else {
+                Swal.showValidationMessage((res && res.message) || 'Không thể lưu thay đổi.');
+                resolve(false);
+              }
+            })
+            .withFailureHandler(function(err) {
+              Swal.showValidationMessage('Lỗi hệ thống: ' + err);
+              resolve(false);
+            })
+            .suaMatHangDNVT(maNamHoc, dvThangDangXem, idx,
+              { tenMatHang: ten, dvt: dvt, soLuong: sl, donGia: dg, ghiChu: ghiChu },
+              item.tenMatHang);
+        });
+      }
+    }).then(function(result) {
+      if (result.isConfirmed && result.value) {
+        dvTaiThangHienTai(dvThangDangXem);
+        Swal.fire({ icon: 'success', title: 'Đã cập nhật!', timer: 1300, showConfirmButton: false });
       }
     });
   }
