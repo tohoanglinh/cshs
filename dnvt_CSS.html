@@ -154,4 +154,30 @@
     color: #666; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: 0.2s;
   }
   .dv-nav-item.active { background-color: #e3f2fd; color: #1565c0; }
+
+  /* ===== Tab Thống kê ===== */
+  .dv-tk-progress { height: 10px; background: #e8eef6; border-radius: 6px; overflow: hidden; margin: 10px 0 4px; }
+  .dv-tk-progress-bar { height: 100%; background: #1565c0; border-radius: 6px; transition: width 0.4s; }
+  .dv-tk-progress-bar.dv-tk-vuot { background: #c62828; }
+  .dv-tk-progress-note { font-size: 12px; color: #666; text-align: right; margin-bottom: 4px; }
+
+  .dv-chart-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px 8px 8px; margin-bottom: 6px; }
+  .dv-chart { display: flex; gap: 4px; align-items: flex-end; }
+  .dv-chart-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+  .dv-chart-col:active .dv-chart-bar { opacity: 0.7; }
+  .dv-chart-area { height: 150px; width: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+  .dv-chart-val { font-size: 10px; color: #444; font-weight: 600; margin-bottom: 3px; white-space: nowrap; }
+  .dv-chart-bar { width: 70%; max-width: 30px; background: #64a4e8; border-radius: 4px 4px 0 0; }
+  .dv-chart-col.dv-chart-max .dv-chart-bar { background: #1565c0; }
+  .dv-chart-lbl { font-size: 11px; color: #666; margin-top: 6px; padding-top: 4px; border-top: 1px solid #ddd; width: 100%; text-align: center; }
+  .dv-chart-col.dv-chart-empty { cursor: default; }
+  .dv-chart-col.dv-chart-empty .dv-chart-val, .dv-chart-col.dv-chart-empty .dv-chart-lbl { color: #bbb; font-weight: 400; }
+  .dv-chart-hint { font-size: 12px; color: #999; text-align: center; margin: 4px 0 18px; }
+
+  .dv-tk-table { font-size: 12.5px; }
+  .dv-tk-table th, .dv-tk-table td { padding: 8px 5px; }
+  .dv-tk-table tbody tr.dv-tk-row { cursor: pointer; }
+  .dv-tk-table tbody tr.dv-tk-row:active { background: #eef4fc; }
+  .dv-tk-table td.dv-num, .dv-tk-table th.dv-num { text-align: right; }
+  .dv-tk-table tr.dv-tk-total td { font-weight: 700; background: #fafafa; border-bottom: none; }
 </style>

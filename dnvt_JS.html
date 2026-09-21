@@ -127,6 +127,7 @@
     } else if (tabName === 'thongke') {
       document.getElementById('dv-tab-thongke').classList.add('active');
       navs[2].classList.add('active');
+      taiThongKeDNVT(); // luôn tải lại để số liệu phản ánh đúng những gì vừa lưu/sửa/xóa
     }
   }
 
@@ -444,6 +445,138 @@
         Swal.fire({ icon: 'error', title: 'Lỗi hệ thống!', text: err, confirmButtonColor: '#d33' });
       })
       .luuDeNghiVatTu({ maNamHoc: maNamHoc, thangSuDung: dvThangDangXem, danhSachMatHang: dvDanhSachCho });
+  }
+
+  // ==== 12. TAB THỐNG KÊ: chi tiêu theo tháng của cả năm học ====
+
+  // Rút gọn số tiền cho nhãn trên cột biểu đồ: 10500000 -> "10,5 tr", 350000 -> "350k"
+  function dvFormatTienNgan(so) {
+    var n = Number(so) || 0;
+    if (n === 0) return '0';
+    var a = Math.abs(n), s;
+    if (a >= 1000000) s = (Math.round(a / 100000) / 10).toString().replace('.', ',') + ' tr';
+    else if (a >= 1000) s = Math.round(a / 1000) + 'k';
+    else s = String(Math.round(a));
+    return (n < 0 ? '-' : '') + s;
+  }
+
+  function dvFormatPhanTram(p) {
+    return (Math.round(p * 10) / 10).toString().replace('.', ',') + '%';
+  }
+
+  // Dựng HTML thống kê từ dữ liệu server trả về (hàm thuần, không đụng vào DOM)
+  function dvXayDungHtmlThongKe(res) {
+    var ds = res.thang || [];
+    var budget = Number(res.budget) || 0;
+    var tongDaChi = Number(res.tongDaChi) || 0;
+    var conLai = budget - tongDaChi;
+    var coPhieu = ds.filter(function(t) { return t.coPhieu; });
+
+    var maxTong = 0, thangMax = null;
+    coPhieu.forEach(function(t) {
+      if (t.tong > maxTong) { maxTong = t.tong; thangMax = t; }
+    });
+    var trungBinh = coPhieu.length > 0 ? tongDaChi / coPhieu.length : 0;
+
+    var html = '';
+
+    // --- Khối tổng quan ---
+    html += '<div class="dv-budget-box">';
+    html += '<div class="dv-budget-item"><span class="dv-budget-label">Ngân sách dự trù (cả năm học)</span>' +
+            '<span class="dv-budget-value">' + dvFormatTien(budget) + '</span></div>';
+    html += '<div class="dv-budget-item"><span class="dv-budget-label">Tổng đã chi</span>' +
+            '<span class="dv-budget-value dv-budget-dachi">' + dvFormatTien(tongDaChi) + '</span></div>';
+    html += '<div class="dv-budget-item"><span class="dv-budget-label">Còn lại</span>' +
+            '<span class="dv-budget-value dv-budget-conlai' + (conLai < 0 ? ' dv-budget-am' : '') + '">' + dvFormatTien(conLai) + '</span></div>';
+    if (budget > 0) {
+      var pct = tongDaChi / budget * 100;
+      html += '<div class="dv-tk-progress"><div class="dv-tk-progress-bar' + (pct > 100 ? ' dv-tk-vuot' : '') +
+              '" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+              '<div class="dv-tk-progress-note">Đã dùng ' + dvFormatPhanTram(pct) + ' ngân sách' +
+              (pct > 100 ? ' (vượt ngân sách)' : '') + '</div>';
+    }
+    if (coPhieu.length > 0) {
+      html += '<div class="dv-budget-item"><span class="dv-budget-label">Trung bình/tháng (' + coPhieu.length + ' tháng có phiếu)</span>' +
+              '<span class="dv-budget-value">' + dvFormatTien(trungBinh) + '</span></div>';
+    }
+    if (thangMax) {
+      html += '<div class="dv-budget-item"><span class="dv-budget-label">Tháng chi nhiều nhất</span>' +
+              '<span class="dv-budget-value">Tháng ' + thangMax.thang + ' (' + dvFormatTien(thangMax.tong) + ')</span></div>';
+    }
+    html += '</div>';
+
+    // --- Biểu đồ cột theo tháng ---
+    html += '<div class="dv-section-title">📈 Chi tiêu theo tháng</div>';
+    html += '<div class="dv-chart-card"><div class="dv-chart">';
+    ds.forEach(function(t) {
+      var cls = 'dv-chart-col';
+      if (!t.coPhieu) cls += ' dv-chart-empty';
+      else if (thangMax && t.nam === thangMax.nam && t.thang === thangMax.thang) cls += ' dv-chart-max';
+
+      var chieuCao = (t.coPhieu && maxTong > 0) ? Math.max(3, Math.round(t.tong / maxTong * 125)) : 0;
+      var click = t.coPhieu ? ' onclick="moThangTuThongKeDNVT(' + t.nam + ',' + t.thang + ')"' : '';
+      html += '<div class="' + cls + '"' + click + '>' +
+                '<div class="dv-chart-area">' +
+                  '<div class="dv-chart-val">' + (t.coPhieu ? dvFormatTienNgan(t.tong) : '–') + '</div>' +
+                  (chieuCao > 0 ? '<div class="dv-chart-bar" style="height:' + chieuCao + 'px"></div>' : '') +
+                '</div>' +
+                '<div class="dv-chart-lbl">T' + t.thang + '</div>' +
+              '</div>';
+    });
+    html += '</div></div>';
+    html += '<div class="dv-chart-hint">Bấm vào một cột để xem phiếu của tháng đó</div>';
+
+    // --- Bảng chi tiết ---
+    html += '<div class="dv-section-title">🗓️ Chi tiết từng tháng</div>';
+    if (coPhieu.length === 0) {
+      html += '<div class="dv-empty">Năm học này chưa có phiếu đề nghị nào.</div>';
+      return html;
+    }
+    html += '<div class="dv-table-wrap"><table class="dv-table dv-tk-table"><thead><tr>' +
+            '<th>Tháng</th><th class="dv-num">Số MH</th><th class="dv-num">Chi tiêu</th><th class="dv-num">Lũy kế</th><th class="dv-num">% NS</th>' +
+            '</tr></thead><tbody>';
+    var tongSoMH = 0;
+    coPhieu.forEach(function(t) {
+      tongSoMH += Number(t.soMatHang) || 0;
+      html += '<tr class="dv-tk-row" onclick="moThangTuThongKeDNVT(' + t.nam + ',' + t.thang + ')">' +
+                '<td>T' + t.thang + '/' + t.nam + '</td>' +
+                '<td class="dv-num">' + t.soMatHang + '</td>' +
+                '<td class="dv-num">' + dvFormatTien(t.tong) + '</td>' +
+                '<td class="dv-num">' + dvFormatTien(t.luyKe) + '</td>' +
+                '<td class="dv-num">' + (budget > 0 ? dvFormatPhanTram(t.tong / budget * 100) : '–') + '</td>' +
+              '</tr>';
+    });
+    html += '<tr class="dv-tk-total"><td>Cộng</td><td class="dv-num">' + tongSoMH + '</td>' +
+            '<td class="dv-num">' + dvFormatTien(tongDaChi) + '</td><td></td>' +
+            '<td class="dv-num">' + (budget > 0 ? dvFormatPhanTram(tongDaChi / budget * 100) : '–') + '</td></tr>';
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function taiThongKeDNVT() {
+    var box = document.getElementById('dvThongKeNoiDung');
+    box.innerHTML = '<div class="dv-empty">Đang tải thống kê...</div>';
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.success) {
+          box.innerHTML = '<div class="dv-empty">' + ((res && res.message) || 'Không tải được thống kê.') + '</div>';
+          return;
+        }
+        document.getElementById('dvTkNamHoc').innerText = res.tenNamHoc ? 'Năm học ' + res.tenNamHoc : '';
+        box.innerHTML = dvXayDungHtmlThongKe(res);
+      })
+      .withFailureHandler(function(err) {
+        box.innerHTML = '<div class="dv-empty">Lỗi tải thống kê: ' + err + '</div>';
+      })
+      .thongKeDNVT(maNamHocHienTai());
+  }
+
+  // Bấm vào 1 tháng trong thống kê -> quay lại tab Nhập, hiển thị phiếu của tháng đó
+  function moThangTuThongKeDNVT(nam, thang) {
+    document.getElementById('dvThang').value = nam + '-' + (thang < 10 ? '0' : '') + thang;
+    chuyenTabDNVT('nhap');
+    doiThangDNVT();
   }
 
   // 11. Xuất Excel / PDF phiếu đề nghị vật tư của tháng đang chọn

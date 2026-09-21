@@ -1760,3 +1760,89 @@ function suaMatHangDNVT(maNamHoc, thangSuDung, viTriDong, duLieuMoi, tenCu) {
     return { success: false, message: "Lỗi: " + err.toString() };
   }
 }
+
+// 5. THỐNG KÊ chi tiêu theo từng tháng của cả năm học (chỉ ĐỌC, không ghi gì lên Sheet)
+//    Đọc ô TỔNG của mọi sheet "Tháng X.YY" trong file năm học, sắp theo thứ tự
+//    năm học (tháng 9 -> tháng 8). Tháng nào chưa có phiếu vẫn có mặt trong danh sách
+//    (coPhieu = false) để biểu đồ luôn đủ 12 cột.
+function thongKeDNVT(maNamHoc) {
+  try {
+    var ma = (maNamHoc || MA_NAM_HOC_MAC_DINH).toString().trim();
+    var namBatDau = 2000 + parseInt(ma.substring(0, 2), 10);
+    var namKetThuc = 2000 + parseInt(ma.substring(2, 4), 10);
+
+    var ss = moFileNamHoc(ma);
+
+    // Ngân sách dự trù cả năm học: đọc từ Template_DNVT (nguồn chân lý duy nhất)
+    var budget = 0;
+    var template = ss.getSheetByName(DNVT_TEN_SHEET_TEMPLATE);
+    if (template) {
+      var vtBudget = timOTheoNhan(template, "Chi phí ngân sách dự kiến", 'chua');
+      if (vtBudget) {
+        budget = dvParseTienVND(oGiaTriKeBenNhanDNVT(template, vtBudget.row, vtBudget.col).getValue());
+      }
+    }
+
+    // Đọc từng sheet tháng đã có
+    var re = /^Tháng\s+(\d{1,2})\.(\d{2})$/;
+    var map = {}; // mốc (năm*12+tháng) -> thông tin tháng
+    ss.getSheets().forEach(function(sh) {
+      var m = re.exec(sh.getName());
+      if (!m) return; // bỏ qua Template_DNVT và các sheet khác
+
+      var thang = parseInt(m[1], 10);
+      var nam = namDayDuDNVT(ma, m[2]);
+      var tong = 0, soMatHang = 0;
+
+      try {
+        var ct = layCauTrucBangDNVT(sh);
+        tong = Number(sh.getRange(ct.hangTong, ct.colThanhTien).getValue()) || 0;
+        var soHang = ct.hangTong - ct.hangHeader - 1;
+        if (soHang > 0) {
+          var cotTen = sh.getRange(ct.hangHeader + 1, ct.colTenMH, soHang, 1).getValues();
+          cotTen.forEach(function(r) {
+            if (r[0] && r[0].toString().trim() !== "") soMatHang++;
+          });
+        }
+      } catch (e) {
+        // sheet lỗi cấu trúc thì coi như 0, không làm hỏng cả bảng thống kê
+      }
+
+      map[nam * 12 + thang] = { thang: thang, nam: nam, tong: tong, soMatHang: soMatHang, coPhieu: true };
+    });
+
+    // Đủ 12 tháng của năm học (9,10,11,12 của năm bắt đầu; 1..8 của năm kết thúc)
+    var dsThang = [];
+    var daCo = {};
+    for (var i = 0; i < 12; i++) {
+      var t = ((8 + i) % 12) + 1;
+      var n = (t >= 9) ? namBatDau : namKetThuc;
+      var moc = n * 12 + t;
+      daCo[moc] = true;
+      dsThang.push(map[moc] || { thang: t, nam: n, tong: 0, soMatHang: 0, coPhieu: false });
+    }
+    // Phòng trường hợp có sheet tháng nằm ngoài 12 tháng chuẩn: vẫn cộng vào để tổng không bị thiếu
+    Object.keys(map).forEach(function(k) {
+      if (!daCo[k]) dsThang.push(map[k]);
+    });
+    dsThang.sort(function(a, b) { return (a.nam * 12 + a.thang) - (b.nam * 12 + b.thang); });
+
+    // Lũy kế + tổng
+    var luyKe = 0;
+    dsThang.forEach(function(t) {
+      luyKe += t.tong;
+      t.luyKe = luyKe;
+    });
+
+    return {
+      success: true,
+      tenNamHoc: namBatDau + " - " + namKetThuc,
+      budget: budget,
+      tongDaChi: luyKe,
+      conLai: budget - luyKe,
+      thang: dsThang
+    };
+  } catch (err) {
+    return { success: false, message: "Lỗi: " + err.toString() };
+  }
+}
