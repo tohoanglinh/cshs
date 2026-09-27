@@ -330,11 +330,43 @@ function layDanhSachLop(maNamHoc) {
     // 4. Lọc bỏ trùng lặp
     var uniqueLop = Array.from(new Set(rawLopList));
 
+    // 5. Sắp xếp lại theo đúng thứ tự Khối (số) -> Chữ cái -> Số thứ tự
+    //    Ví dụ mong muốn: 1A1, 1A2, ..., 1A9, 1B0, 1B1, ..., 2A0, 2A1, ...
+    uniqueLop.sort(sapXepTenLop);
+
     return uniqueLop;
   } catch (error) {
     Logger.log("Lỗi đọc danh sách lớp: " + error.toString());
     return [];
   }
+}
+
+// Hàm so sánh dùng để sắp xếp tên lớp dạng "<Khối><Chữ cái><Số>", ví dụ "1A1", "3A4", "10B2".
+// Tách tên lớp thành 3 phần: số khối, chữ cái, số thứ tự - rồi so sánh lần lượt từng phần
+// (so sánh SỐ chứ không so sánh CHUỖI, để "1A9" đứng trước "1A10" thay vì bị đảo lộn).
+// Nếu tên lớp không đúng định dạng trên (trường hợp hiếm/đặc biệt) thì xếp xuống cuối
+// và so sánh theo bảng chữ cái để không bị lỗi.
+function sapXepTenLop(a, b) {
+  var re = /^(\d+)\s*([A-Za-zÀ-ỹ]*)\s*(\d*)$/;
+  var ma = re.exec((a || "").toString().trim());
+  var mb = re.exec((b || "").toString().trim());
+
+  if (ma && mb) {
+    var khoiA = parseInt(ma[1], 10), khoiB = parseInt(mb[1], 10);
+    if (khoiA !== khoiB) return khoiA - khoiB;
+
+    var chuA = ma[2].toUpperCase(), chuB = mb[2].toUpperCase();
+    if (chuA !== chuB) return chuA < chuB ? -1 : 1;
+
+    var soA = ma[3] === "" ? 0 : parseInt(ma[3], 10);
+    var soB = mb[3] === "" ? 0 : parseInt(mb[3], 10);
+    return soA - soB;
+  }
+
+  // Một trong hai (hoặc cả hai) không khớp định dạng chuẩn -> đẩy cái không khớp xuống cuối
+  if (ma && !mb) return -1;
+  if (!ma && mb) return 1;
+  return (a || "").toString().localeCompare((b || "").toString());
 }
 
 // 5. Lấy Danh mục lỗi từ tab DanhMucLoi (theo đúng năm học)
