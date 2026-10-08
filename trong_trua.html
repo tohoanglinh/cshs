@@ -18,6 +18,30 @@
         </div>
       </div>
 
+      <details class="tt-holiday-card" id="ttNghiCard">
+        <summary>🏖️ Ngày nghỉ tháng <span id="ttNghiThangHienThi"></span> <span class="tt-holiday-badge" id="ttNghiSoNgay">0</span></summary>
+        <div class="tt-holiday-body">
+          <div class="tt-form-row">
+            <div class="tt-form-group">
+              <label>Nghỉ từ ngày</label>
+              <input type="date" id="ttNghiTu" onchange="ttNghiDongBoDen()">
+            </div>
+            <div class="tt-form-group">
+              <label>Đến ngày</label>
+              <input type="date" id="ttNghiDen">
+            </div>
+          </div>
+          <div class="tt-form-row">
+            <div class="tt-form-group">
+              <label>Lý do (không bắt buộc)</label>
+              <input type="text" id="ttNghiLyDo" placeholder="VD: Nghỉ lễ Quốc khánh">
+            </div>
+          </div>
+          <button type="button" class="tt-btn-holiday" id="ttBtnThemNghi" onclick="themNgayNghiTT()">➕ Thêm ngày nghỉ</button>
+          <div id="ttDanhSachNghi" class="tt-holiday-list"></div>
+        </div>
+      </details>
+
       <div class="tt-form-row">
         <div class="tt-form-group">
           <label>Từ ngày</label>
@@ -77,9 +101,17 @@
       <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Tra cứu đang phát triển...</h3>
     </div>
 
-    <!-- TAB 3: THỐNG KÊ (chưa phát triển) -->
-    <div id="tt-tab-thongke" class="tt-tab-content" style="text-align:center; padding: 50px 20px;">
-      <h3 style="color:#999; font-weight: normal;">🚧 Tính năng Thống kê đang phát triển...</h3>
+    <!-- TAB 3: THỐNG KÊ - Bảng chấm công tổng quan cả tháng (dạng lịch) -->
+    <div id="tt-tab-thongke" class="tt-tab-content">
+      <h2>📊 Tổng quan trông trưa theo tháng</h2>
+      <div class="tt-form-row">
+        <div class="tt-form-group">
+          <label>Tháng</label>
+          <input type="month" id="ttTkThang" onchange="taiThongKeTT()">
+        </div>
+      </div>
+      <div id="ttTkTomTat" class="tt-tk-summary"></div>
+      <div id="ttTkBang"><div class="tt-empty">Đang tải dữ liệu...</div></div>
     </div>
   </div>
 

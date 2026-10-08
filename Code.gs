@@ -774,6 +774,139 @@ function timCotBoPhan(headers) {
   return -1;
 }
 
+// ---------------------------------------------------------------------------
+// NGÀY NGHỈ TRÔNG TRƯA: lưu ở tab "NgayNghiTrongTrua" (tự tạo nếu chưa có)
+// 3 cột: Dấu thời gian | Ngày | Lý do. Mỗi dòng = 1 ngày nghỉ (chỉ lưu Thứ 2 - Thứ 6).
+// Những ngày này sẽ KHÔNG được xếp trông trưa.
+// ---------------------------------------------------------------------------
+var TT_TEN_SHEET_NGAY_NGHI = "NgayNghiTrongTrua";
+
+function layHoacTaoSheetNgayNghiTT(ss) {
+  var sheet = ss.getSheetByName(TT_TEN_SHEET_NGAY_NGHI);
+  if (!sheet) {
+    sheet = ss.insertSheet(TT_TEN_SHEET_NGAY_NGHI);
+    sheet.appendRow(["Dấu thời gian", "Ngày", "Lý do"]);
+    sheet.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#e3f2fd");
+  }
+  return sheet;
+}
+
+// Đọc toàn bộ ngày nghỉ -> [{ngay: "yyyy-MM-dd", lyDo}] sắp xếp tăng dần
+function docNgayNghiTT(ss) {
+  var sheet = ss.getSheetByName(TT_TEN_SHEET_NGAY_NGHI);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  var kq = [];
+  data.forEach(function(row) {
+    var ngay = layNgayDangYYYYMMDD(row[1], ss);
+    if (ngay) kq.push({ ngay: ngay, lyDo: (row[2] || "").toString() });
+  });
+  kq.sort(function(a, b) { return a.ngay < b.ngay ? -1 : (a.ngay > b.ngay ? 1 : 0); });
+  return kq;
+}
+
+// Trả về map { "yyyy-MM-dd": lyDo } (rỗng nếu chưa có ngày nghỉ nào)
+function layMapNgayNghiTT(ss) {
+  var map = {};
+  docNgayNghiTT(ss).forEach(function(o) { map[o.ngay] = o.lyDo; });
+  return map;
+}
+
+// Client gọi: lấy danh sách ngày nghỉ của năm học
+function layNgayNghiTrongTrua(maNamHoc) {
+  try {
+    return docNgayNghiTT(moFileNamHoc(maNamHoc));
+  } catch (err) {
+    return [];
+  }
+}
+
+// Thêm ngày nghỉ cho 1 khoảng ngày (Thứ 7/CN & ngày đã nghỉ tự bỏ qua) và
+// XÓA luôn các dòng trông trưa đã xếp vào những ngày này.
+function themNgayNghiTrongTrua(tuNgayStr, denNgayStr, lyDo, maNamHoc) {
+  try {
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = layHoacTaoSheetNgayNghiTT(ss);
+    var daCo = layMapNgayNghiTT(ss);
+
+    function pad2(n) { return (n < 10 ? "0" : "") + n; }
+    var pt = tuNgayStr.split("-"), pd = denNgayStr.split("-");
+    var d = new Date(parseInt(pt[0], 10), parseInt(pt[1], 10) - 1, parseInt(pt[2], 10), 12, 0, 0);
+    var dCuoi = new Date(parseInt(pd[0], 10), parseInt(pd[1], 10) - 1, parseInt(pd[2], 10), 12, 0, 0);
+
+    var ngayMoi = [];   // "yyyy-MM-dd"
+    var soNgayDaCo = 0;
+    var dem = 0;
+    while (d.getTime() <= dCuoi.getTime() && dem < 370) {
+      var thu = d.getDay();
+      var key = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+      if (thu >= 1 && thu <= 5) {
+        if (Object.prototype.hasOwnProperty.call(daCo, key)) soNgayDaCo++;
+        else ngayMoi.push(key);
+      }
+      d.setDate(d.getDate() + 1);
+      dem++;
+    }
+
+    if (ngayMoi.length === 0) {
+      return { success: false, message: "Không có ngày làm việc mới nào để thêm (có thể là Thứ 7/CN hoặc đã là ngày nghỉ).", dsNgayNghi: docNgayNghiTT(ss) };
+    }
+
+    // 1. Ghi ngày nghỉ mới (1 lệnh ghi)
+    var rows = ngayMoi.map(function(k) {
+      var p = k.split("-");
+      return [new Date(), new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10), 12, 0, 0), lyDo || ""];
+    });
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
+
+    // 2. Xóa người đã xếp trông trưa vào các ngày vừa đặt nghỉ
+    var soDongXoa = 0;
+    var sheetTT = ss.getSheetByName("TrongTrua");
+    if (sheetTT && sheetTT.getLastRow() >= 2) {
+      var setMoi = {};
+      ngayMoi.forEach(function(k) { setMoi[k] = true; });
+      var lastRow = sheetTT.getLastRow();
+      var duLieu = sheetTT.getRange(2, 1, lastRow - 1, 5).getValues();
+      var giuLai = duLieu.filter(function(row) {
+        return !setMoi[layNgayDangYYYYMMDD(row[1], ss)];
+      });
+      soDongXoa = duLieu.length - giuLai.length;
+      if (soDongXoa > 0) {
+        sheetTT.getRange(2, 1, lastRow - 1, 5).clearContent();
+        if (giuLai.length > 0) sheetTT.getRange(2, 1, giuLai.length, 5).setValues(giuLai);
+      }
+    }
+
+    var msg = "Đã thêm " + ngayMoi.length + " ngày nghỉ.";
+    if (soNgayDaCo > 0) msg += " (" + soNgayDaCo + " ngày đã là ngày nghỉ từ trước.)";
+    if (soDongXoa > 0) msg += " Đã xóa " + soDongXoa + " dòng trông trưa đã xếp vào những ngày này.";
+
+    return { success: true, message: msg, soDongXoa: soDongXoa, dsNgayNghi: docNgayNghiTT(ss) };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
+}
+
+// Xóa 1 ngày nghỉ (ngày đó lại được xếp trông trưa bình thường)
+function xoaNgayNghiTrongTrua(ngayStr, maNamHoc) {
+  try {
+    var ss = moFileNamHoc(maNamHoc);
+    var sheet = ss.getSheetByName(TT_TEN_SHEET_NGAY_NGHI);
+    if (sheet && sheet.getLastRow() >= 2) {
+      var lastRow = sheet.getLastRow();
+      var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+      var giuLai = data.filter(function(row) {
+        return layNgayDangYYYYMMDD(row[1], ss) !== ngayStr;
+      });
+      sheet.getRange(2, 1, lastRow - 1, 3).clearContent();
+      if (giuLai.length > 0) sheet.getRange(2, 1, giuLai.length, 3).setValues(giuLai);
+    }
+    return { success: true, dsNgayNghi: docNgayNghiTT(ss) };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
+}
+
 // 1. Lấy danh sách nhân sự (Họ tên + Bộ phận) từ sheet DsTrongTrua và danh sách lớp
 function layDSGVChoTrongTrua(maNamHoc) {
   try {
@@ -994,9 +1127,10 @@ function luuTrongTruaTheoKhoangNgay(tuNgayStr, denNgayStr, maNamHoc, danhSach) {
       });
     }
 
-    // Chuẩn bị dữ liệu mới từ danh sách client gửi lên
+    // Chuẩn bị dữ liệu mới từ danh sách client gửi lên (bỏ qua các ngày nghỉ)
+    var mapNghi = layMapNgayNghiTT(ss);
     var dataMoi = (danhSach || [])
-      .filter(function(item) { return item && item.hoTen && item.ngay; })
+      .filter(function(item) { return item && item.hoTen && item.ngay && !Object.prototype.hasOwnProperty.call(mapNghi, item.ngay); })
       .map(function(item) {
         var parts = item.ngay.split("-");
         var ngayObj = item.ngay;
@@ -1164,6 +1298,22 @@ function xuatFileTrongTruaChuan(thangStr, maNamHoc) {
     tempSheet.setRowHeight(2, 24);
     tempSheet.setRowHeight(3, 26);
     tempSheet.setRowHeight(4, 22);
+  }
+
+  // 6b. Tô xám các cột là NGÀY NGHỈ và ghi chú danh sách ngày nghỉ ở dòng 2
+  var mapNghiAll = layMapNgayNghiTT(ss);
+  var ghiChuNghi = [];
+  danhSachNgayLamViec.forEach(function(nv, i) {
+    var key = nam + "-" + (thang < 10 ? "0" : "") + thang + "-" + (nv.ngay < 10 ? "0" : "") + nv.ngay;
+    if (Object.prototype.hasOwnProperty.call(mapNghiAll, key)) {
+      ghiChuNghi.push(nv.ngay + "/" + thang + (mapNghiAll[key] ? " (" + mapNghiAll[key] + ")" : ""));
+      if (lastRow >= 3) {
+        tempSheet.getRange(3, 4 + i, lastRow - 2, 1).setBackground("#d9d9d9");
+      }
+    }
+  });
+  if (ghiChuNghi.length > 0) {
+    tempSheet.getRange(2, 4).setValue("Ngày nghỉ: " + ghiChuNghi.join(", ")).setFontStyle("italic");
   }
 
   // 7. Khối ký tên (Ban giám hiệu / Tổ trưởng CSHS)

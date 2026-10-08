@@ -210,4 +210,82 @@
     color: #666; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: 0.2s;
   }
   .tt-nav-item.active { background-color: #fff3e0; color: #e65100; }
+
+  /* ===== Ngày nghỉ (không xếp trông trưa) ===== */
+  .tt-holiday-card {
+    background: #f3f8ff;
+    border: 1px solid #c9dcf5;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+  }
+  .tt-holiday-card summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    color: #1a4f9c;
+    outline: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tt-holiday-badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: #1a73e8;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+  .tt-holiday-body { margin-top: 12px; }
+  .tt-btn-holiday {
+    width: 100%; padding: 10px; background-color: #1a73e8; color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .tt-btn-holiday:active { background-color: #1557b0; }
+  .tt-btn-holiday:disabled { background-color: #9bbcf0; cursor: not-allowed; }
+  .tt-holiday-list { margin-top: 12px; }
+  .tt-holiday-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #dbe7f8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .tt-holiday-item .tt-holiday-date { font-weight: 700; color: #1a4f9c; white-space: nowrap; }
+  .tt-holiday-item .tt-holiday-reason { color: #666; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+  /* ===== Tab Thống kê: bảng chấm công cả tháng ===== */
+  .tt-tk-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tt-tk-chip {
+    background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2;
+    border-radius: 20px; padding: 4px 12px; font-size: 12.5px; font-weight: 600;
+  }
+  .tt-tk-wrap {
+    overflow: auto; -webkit-overflow-scrolling: touch;
+    max-height: 70vh; border: 1px solid #e6e6e6; border-radius: 8px;
+  }
+  .tt-tk-table { border-collapse: separate; border-spacing: 0; font-size: 12.5px; width: max-content; min-width: 100%; }
+  .tt-tk-table th, .tt-tk-table td {
+    padding: 6px 7px; border-right: 1px solid #eee; border-bottom: 1px solid #eee;
+    text-align: center; white-space: nowrap; background: #fff;
+  }
+  .tt-tk-table thead th { background: #fff3e0; color: #e65100; font-weight: 700; position: sticky; top: 0; z-index: 2; }
+  .tt-tk-table thead tr.tt-tk-r2 th { top: 29px; background: #ffe8c7; color: #333; }
+  .tt-tk-table .tt-tk-c1 { position: sticky; left: 0; z-index: 1; min-width: 30px; width: 30px; }
+  .tt-tk-table .tt-tk-c2 { position: sticky; left: 30px; z-index: 1; text-align: left; min-width: 140px; font-weight: 600; box-shadow: 2px 0 3px rgba(0,0,0,0.06); }
+  .tt-tk-table thead .tt-tk-c1, .tt-tk-table thead .tt-tk-c2 { z-index: 3; }
+  .tt-tk-table td.tt-tk-bp { color: #666; }
+  .tt-tk-table td.tt-tk-co { background: #fff8ee; color: #e65100; font-weight: 700; }
+  .tt-tk-table th.tt-tk-nghi, .tt-tk-table td.tt-tk-nghi { background: #d9d9d9; color: #777; }
+  .tt-tk-table td.tt-tk-tong { font-weight: 700; color: #1b8754; }
+  .tt-tk-table tfoot td { background: #fafafa; font-weight: 700; color: #555; position: sticky; bottom: 0; z-index: 1; border-top: 2px solid #ffcc80; }
+  .tt-tk-table tfoot td.tt-tk-c1, .tt-tk-table tfoot td.tt-tk-c2 { z-index: 3; }
+  .tt-tk-table tfoot td.tt-tk-nghi { background: #d9d9d9; }
+  .tt-tk-note { font-size: 12.5px; color: #666; margin-top: 10px; line-height: 1.5; }
 </style>
